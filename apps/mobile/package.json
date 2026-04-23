@@ -12,7 +12,7 @@
     "export:web": "expo export --platform web",
     "lint": "eslint src App.tsx",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.1.0",

@@ -23,7 +23,7 @@ interface AuthPluginOptions {
 const plugin: FastifyPluginAsync<AuthPluginOptions> = async (app, opts) => {
   const { jwtSecret } = opts;
 
-  app.decorateRequest('user', null);
+  app.decorateRequest('user', undefined);
 
   app.addHook('onRequest', async (req) => {
     const header = req.headers.authorization;
