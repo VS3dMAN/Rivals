@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
+import * as Sentry from '@sentry/node';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getEnv } from './env';
 import authPlugin from './plugins/auth';
@@ -26,6 +27,14 @@ declare module 'fastify' {
 
 export async function buildServer(opts: BuildOptions = {}): Promise<FastifyInstance> {
   const env = getEnv();
+
+  if (env.SENTRY_DSN && !Sentry.getClient()) {
+    Sentry.init({
+      dsn: env.SENTRY_DSN,
+      environment: env.NODE_ENV,
+      tracesSampleRate: 0.1,
+    });
+  }
 
   const app = Fastify({
     logger: opts.logger ?? env.NODE_ENV !== 'test',

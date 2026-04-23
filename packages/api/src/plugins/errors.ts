@@ -1,5 +1,6 @@
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
+import * as Sentry from '@sentry/node';
 import { ZodError } from 'zod';
 
 const plugin: FastifyPluginAsync = async (app) => {
@@ -14,6 +15,7 @@ const plugin: FastifyPluginAsync = async (app) => {
     const status = err.statusCode ?? 500;
     if (status >= 500) {
       req.log.error({ err }, 'unhandled error');
+      if (Sentry.getClient()) Sentry.captureException(err);
     }
     return reply.status(status).send({
       code: err.code ?? 'INTERNAL_ERROR',

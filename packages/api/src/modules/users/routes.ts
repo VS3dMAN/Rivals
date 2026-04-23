@@ -1,10 +1,17 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
 import { schema, type Db } from '../../db/client';
 
 interface UsersRouteOptions {
   db: Db;
 }
+
+const patchMeSchema = z.object({
+  displayName: z.string().min(1).max(60).optional(),
+  avatarUrl: z.string().url().nullable().optional(),
+  timezone: z.string().optional(),
+});
 
 const routes: FastifyPluginAsync<UsersRouteOptions> = async (app, opts) => {
   const { db } = opts;
@@ -32,6 +39,26 @@ const routes: FastifyPluginAsync<UsersRouteOptions> = async (app, opts) => {
       throw err;
     }
     return row;
+  });
+
+  app.patch('/me', async (req) => {
+    const auth = await app.requireAuth(req);
+    const patch = patchMeSchema.parse(req.body);
+    if (Object.keys(patch).length === 0) return { ok: true };
+
+    const [updated] = await db
+      .update(schema.users)
+      .set(patch)
+      .where(eq(schema.users.id, auth.id))
+      .returning({
+        id: schema.users.id,
+        username: schema.users.username,
+        displayName: schema.users.displayName,
+        email: schema.users.email,
+        avatarUrl: schema.users.avatarUrl,
+        timezone: schema.users.timezone,
+      });
+    return updated;
   });
 };
 
