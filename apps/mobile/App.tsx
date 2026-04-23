@@ -13,6 +13,7 @@ import { useSessionStore } from './src/stores/session';
 import { TabsNavigator } from './src/navigation/TabsNavigator';
 import { AuthGate } from './src/screens/auth/AuthGate';
 import { theme } from './src/theme';
+import { ResponsiveContainer } from '@rivals/ui';
 
 // Sentry init — safe no-op when DSN absent
 const sentryDsn = Constants.expoConfig?.extra?.sentryDsn as string | undefined;
@@ -72,7 +73,11 @@ function SessionHydrator({ children }: { children: React.ReactNode }) {
 
 function Root() {
   const accessToken = useSessionStore((s) => s.accessToken);
-  return accessToken ? <TabsNavigator /> : <AuthGate />;
+  return (
+    <ResponsiveContainer>
+      {accessToken ? <TabsNavigator /> : <AuthGate />}
+    </ResponsiveContainer>
+  );
 }
 
 export default function App() {

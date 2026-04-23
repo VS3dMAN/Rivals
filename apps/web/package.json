@@ -1,0 +1,15 @@
+{
+  "name": "@rivals/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @rivals/mobile run web",
+    "build": "pnpm --filter @rivals/mobile run export:web",
+    "export": "pnpm --filter @rivals/mobile run export:web",
+    "lint": "echo 'web inherits from mobile' && exit 0",
+    "typecheck": "echo 'web inherits from mobile' && exit 0"
+  },
+  "dependencies": {
+    "@rivals/mobile": "workspace:*"
+  }
+}
