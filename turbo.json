@@ -1,0 +1,42 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [".env", ".env.local", "tsconfig.base.json"],
+  "globalEnv": [
+    "NODE_ENV",
+    "SUPABASE_URL",
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_JWT_SECRET",
+    "JWT_SECRET",
+    "SENTRY_DSN",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_BUCKET",
+    "R2_PUBLIC_BASE_URL"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "build/**"]
+    },
+    "lint": {
+      "dependsOn": ["^lint"],
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}

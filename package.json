@@ -1,0 +1,25 @@
+{
+  "name": "rivals",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rivals — cross-platform group habit tracker with live-photo proof",
+  "scripts": {
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "dev": "turbo run dev",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.6.3",
+    "prettier": "^3.3.3",
+    "eslint": "^9.15.0"
+  },
+  "packageManager": "pnpm@9.12.3",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}
