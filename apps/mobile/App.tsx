@@ -12,6 +12,7 @@ import { loadSession } from './src/lib/session';
 import { useSessionStore } from './src/stores/session';
 import { TabsNavigator } from './src/navigation/TabsNavigator';
 import { AuthGate } from './src/screens/auth/AuthGate';
+import { linking } from './src/navigation/linking';
 import { theme } from './src/theme';
 import { ResponsiveContainer } from '@rivals/ui';
 
@@ -88,7 +89,7 @@ export default function App() {
           client={queryClient}
           persistOptions={{ persister: createPersister() }}
         >
-          <NavigationContainer theme={navTheme}>
+          <NavigationContainer theme={navTheme} linking={linking}>
             <StatusBar style="light" />
             <SessionHydrator>
               <Root />

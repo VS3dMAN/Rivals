@@ -3,9 +3,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Text } from 'react-native';
 import { theme } from '../theme';
 import { DashboardScreen } from '../screens/DashboardScreen';
-import { GroupsScreen } from '../screens/GroupsScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
+import { GroupsStack } from './GroupsStack';
 
 const Tab = createBottomTabNavigator();
 
@@ -27,7 +27,6 @@ function makeStack(component: React.ComponentType, title: string) {
 }
 
 const DashboardStack = makeStack(DashboardScreen, 'Today');
-const GroupsStack = makeStack(GroupsScreen, 'Groups');
 const NotificationsStack = makeStack(NotificationsScreen, 'Notifications');
 const ProfileStack = makeStack(ProfileScreen, 'Profile');
 
