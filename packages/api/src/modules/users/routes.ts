@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { and, eq, ilike, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { schema, type Db } from '../../db/client';
 
@@ -11,6 +11,14 @@ const patchMeSchema = z.object({
   displayName: z.string().min(1).max(60).optional(),
   avatarUrl: z.string().url().nullable().optional(),
   timezone: z.string().optional(),
+});
+
+const searchQuerySchema = z.object({
+  u: z
+    .string()
+    .min(1)
+    .max(24)
+    .regex(/^[a-z0-9_]+$/i),
 });
 
 const routes: FastifyPluginAsync<UsersRouteOptions> = async (app, opts) => {
@@ -60,6 +68,25 @@ const routes: FastifyPluginAsync<UsersRouteOptions> = async (app, opts) => {
       });
     return updated;
   });
+
+  // GET /users/search?u=<prefix> — up to 10 matches, excludes current user
+  app.get('/users/search', async (req) => {
+    const auth = await app.requireAuth(req);
+    const { u } = searchQuerySchema.parse(req.query);
+    const rows = await db
+      .select({
+        id: schema.users.id,
+        username: schema.users.username,
+        displayName: schema.users.displayName,
+        avatarUrl: schema.users.avatarUrl,
+      })
+      .from(schema.users)
+      .where(and(ilike(schema.users.username, `${u}%`), ne(schema.users.id, auth.id)))
+      .limit(10);
+    return { users: rows };
+  });
+
+  void sql;
 };
 
 export default routes;

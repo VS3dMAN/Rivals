@@ -9,6 +9,8 @@
     ".": "./src/index.ts",
     "./env": "./src/env.ts",
     "./zod/auth": "./src/zod/auth.ts",
+    "./zod/groups": "./src/zod/groups.ts",
+    "./zod/habits": "./src/zod/habits.ts",
     "./session": "./src/session.ts",
     "./hooks/useCurrentUser": "./src/hooks/useCurrentUser.ts"
   },

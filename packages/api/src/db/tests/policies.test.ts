@@ -48,7 +48,7 @@ run('RLS policies (0003)', () => {
       VALUES ('rls-test-group', ${USER_B}, 'UTC', 'RLSTEST1')
       RETURNING id
     `;
-    groupId = group.id as string;
+    groupId = (group as { id: string } | undefined)?.id as string;
 
     await sql`
       INSERT INTO group_memberships (group_id, user_id, role)
@@ -59,7 +59,7 @@ run('RLS policies (0003)', () => {
       INSERT INTO habits (group_id, name) VALUES (${groupId}, 'Drink water')
       RETURNING id
     `;
-    habitId = habit.id as string;
+    habitId = (habit as { id: string } | undefined)?.id as string;
   });
 
   afterAll(async () => {
@@ -91,7 +91,7 @@ run('RLS policies (0003)', () => {
       await tx.unsafe(`SET LOCAL ROLE authenticated`);
       const rows = await tx`SELECT id FROM habits WHERE group_id = ${groupId}`;
       expect(rows.length).toBe(1);
-      expect(rows[0].id).toBe(habitId);
+      expect((rows[0] as { id: string }).id).toBe(habitId);
     });
   });
 
