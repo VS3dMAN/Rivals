@@ -7,6 +7,7 @@ import {
   updateHabitSchema,
 } from '@rivals/shared/zod/habits';
 import { HttpError, requireAdmin, requireMember } from '../groups/service';
+import { addDays, todayInTz } from '../../lib/tz';
 
 interface HabitsRouteOptions {
   db: Db;
@@ -14,28 +15,6 @@ interface HabitsRouteOptions {
 
 const groupIdParam = z.object({ id: z.string().uuid() });
 const habitIdParam = z.object({ id: z.string().uuid() });
-
-// Compute user-local calendar date string (YYYY-MM-DD) for a given IANA tz.
-function todayInTz(tz: string): string {
-  const now = new Date();
-  try {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(now);
-    return parts;
-  } catch {
-    return now.toISOString().slice(0, 10);
-  }
-}
-
-function addDays(iso: string, days: number): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 const routes: FastifyPluginAsync<HabitsRouteOptions> = async (app, opts) => {
   const { db } = opts;
@@ -124,7 +103,10 @@ const routes: FastifyPluginAsync<HabitsRouteOptions> = async (app, opts) => {
 
     // Today's logs for this user
     const todayLogs = await db
-      .select({ habitId: schema.habitLogs.habitId })
+      .select({
+        id: schema.habitLogs.id,
+        habitId: schema.habitLogs.habitId,
+      })
       .from(schema.habitLogs)
       .where(
         and(
@@ -134,6 +116,8 @@ const routes: FastifyPluginAsync<HabitsRouteOptions> = async (app, opts) => {
           sql`${schema.habitLogs.habitId} = ANY(${habitIds})`,
         ),
       );
+    const todayLogIdByHabit = new Map<string, string>();
+    for (const r of todayLogs) todayLogIdByHabit.set(r.habitId, r.id);
     const completedIds = new Set(todayLogs.map((r) => r.habitId));
 
     // For grace: find latest completion per habit in the last (graceDays+1) days
@@ -177,6 +161,7 @@ const routes: FastifyPluginAsync<HabitsRouteOptions> = async (app, opts) => {
         graceDays: h.graceDays,
         completedToday,
         inGrace,
+        todayLogId: todayLogIdByHabit.get(h.id) ?? null,
       };
     });
 

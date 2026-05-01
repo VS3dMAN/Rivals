@@ -12,6 +12,8 @@ import usersRoutes from './modules/users/routes';
 import authRoutes from './modules/auth/routes';
 import groupsRoutes from './modules/groups/routes';
 import habitsRoutes from './modules/habits/routes';
+import logsRoutes from './modules/logs/routes';
+import { r2 } from './lib/r2';
 import { getDb, type Db } from './db/client';
 
 export interface BuildOptions {
@@ -68,6 +70,7 @@ export async function buildServer(opts: BuildOptions = {}): Promise<FastifyInsta
   await app.register(authRoutes, { db, supabase });
   await app.register(groupsRoutes, { db });
   await app.register(habitsRoutes, { db });
+  await app.register(logsRoutes, { db, r2 });
 
   return app;
 }

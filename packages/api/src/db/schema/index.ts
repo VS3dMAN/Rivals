@@ -4,6 +4,7 @@ export * from './groups';
 export * from './groupMemberships';
 export * from './habits';
 export * from './habitLogs';
+export * from './pendingLogs';
 export * from './streaks';
 export * from './challengeWindows';
 export * from './leaderboardScores';

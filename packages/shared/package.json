@@ -11,6 +11,7 @@
     "./zod/auth": "./src/zod/auth.ts",
     "./zod/groups": "./src/zod/groups.ts",
     "./zod/habits": "./src/zod/habits.ts",
+    "./zod/logs": "./src/zod/logs.ts",
     "./session": "./src/session.ts",
     "./hooks/useCurrentUser": "./src/hooks/useCurrentUser.ts"
   },

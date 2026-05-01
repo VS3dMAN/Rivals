@@ -16,10 +16,24 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../../theme';
 import { useGroupQuery } from '../../hooks/useGroups';
 import { useTodayHabitsQuery, useCreateHabit, type TodayHabit } from '../../hooks/useHabits';
+import { useSignedPhotoUrl } from '../../hooks/useSignedPhotoUrl';
+import { ProofPhotoThumbnail } from '@rivals/ui';
 import type { GroupsStackParamList } from '../../navigation/GroupsStack';
 
 type Nav = NativeStackNavigationProp<GroupsStackParamList, 'GroupDashboard'>;
 type Route = RouteProp<GroupsStackParamList, 'GroupDashboard'>;
+
+function HabitProofThumbnail({ logId }: { logId: string }) {
+  const q = useSignedPhotoUrl(logId);
+  return (
+    <ProofPhotoThumbnail
+      signedUrl={q.data?.url}
+      isLoading={q.isLoading}
+      size={56}
+      label="Proof"
+    />
+  );
+}
 
 function StateChip({ habit }: { habit: TodayHabit }) {
   if (habit.completedToday) {
@@ -43,7 +57,19 @@ function StateChip({ habit }: { habit: TodayHabit }) {
   );
 }
 
-function HabitCard({ habit }: { habit: TodayHabit }) {
+function HabitCard({
+  habit,
+  onCapture,
+}: {
+  habit: TodayHabit;
+  onCapture: (habit: TodayHabit) => void;
+}) {
+  const buttonLabel = habit.completedToday
+    ? 'Re-submit proof'
+    : habit.inGrace
+      ? 'Complete (grace)'
+      : 'Complete';
+
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -57,17 +83,24 @@ function HabitCard({ habit }: { habit: TodayHabit }) {
           {habit.description}
         </Text>
       ) : null}
-      <Pressable
-        style={[styles.completeBtn, habit.completedToday && styles.completeBtnDone]}
-        disabled={habit.completedToday}
-        onPress={() => {
-          Alert.alert('Camera integration lands in Phase 3');
-        }}
-      >
-        <Text style={styles.completeBtnText}>
-          {habit.completedToday ? 'Done for today' : 'Complete'}
-        </Text>
-      </Pressable>
+      {habit.inGrace ? (
+        <View style={styles.graceBanner}>
+          <Text style={styles.graceBannerText}>
+            Grace period ends tonight at midnight. Log now to protect your streak.
+          </Text>
+        </View>
+      ) : null}
+      <View style={styles.cardFooter}>
+        {habit.completedToday && habit.todayLogId ? (
+          <HabitProofThumbnail logId={habit.todayLogId} />
+        ) : null}
+        <Pressable
+          style={[styles.completeBtn, habit.completedToday && styles.completeBtnResubmit]}
+          onPress={() => onCapture(habit)}
+        >
+          <Text style={styles.completeBtnText}>{buttonLabel}</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -185,6 +218,27 @@ export function GroupDashboardScreen() {
   const isAdmin = groupQ.data?.isAdmin ?? false;
   const habits = habitsQ.data?.habits ?? [];
 
+  const onCapture = (habit: TodayHabit) => {
+    const go = () =>
+      nav.navigate('CaptureProof', {
+        groupId,
+        habitId: habit.id,
+        habitName: habit.name,
+      });
+    if (habit.completedToday) {
+      Alert.alert(
+        'Re-submit proof?',
+        'Your current proof will be replaced.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Re-submit', style: 'destructive', onPress: go },
+        ],
+      );
+    } else {
+      go();
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -213,7 +267,7 @@ export function GroupDashboardScreen() {
           contentContainerStyle={styles.list}
           data={habits}
           keyExtractor={(h) => h.id}
-          renderItem={({ item }) => <HabitCard habit={item} />}
+          renderItem={({ item }) => <HabitCard habit={item} onCapture={onCapture} />}
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>No habits yet</Text>
@@ -299,15 +353,32 @@ const styles = StyleSheet.create({
   chipGrace: { backgroundColor: theme.colors.accentMuted },
   chipCompleted: { backgroundColor: theme.colors.success },
   chipText: { ...theme.typography.caption, color: '#0B1220', fontWeight: '700' },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
   completeBtn: {
+    flex: 1,
     backgroundColor: theme.colors.accent,
     padding: theme.spacing.sm,
     borderRadius: theme.radius.sm,
     alignItems: 'center',
-    marginTop: theme.spacing.sm,
   },
   completeBtnDone: { backgroundColor: theme.colors.surfaceRaised },
+  completeBtnResubmit: { backgroundColor: theme.colors.surfaceRaised },
   completeBtnText: { ...theme.typography.heading, color: '#0B1220' },
+  graceBanner: {
+    backgroundColor: theme.colors.accentMuted,
+    padding: theme.spacing.sm,
+    borderRadius: theme.radius.sm,
+  },
+  graceBannerText: {
+    ...theme.typography.caption,
+    color: '#fff',
+    fontWeight: '600',
+  },
   footer: { padding: theme.spacing.md },
   btn: { padding: theme.spacing.md, borderRadius: theme.radius.md, alignItems: 'center' },
   btnPrimary: { backgroundColor: theme.colors.accent },

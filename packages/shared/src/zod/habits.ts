@@ -22,5 +22,6 @@ export const todayHabitSchema = z.object({
   graceDays: z.number().int(),
   completedToday: z.boolean(),
   inGrace: z.boolean(),
+  todayLogId: z.string().uuid().nullable(),
 });
 export type TodayHabit = z.infer<typeof todayHabitSchema>;

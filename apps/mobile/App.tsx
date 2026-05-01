@@ -9,6 +9,7 @@ import Constants from 'expo-constants';
 
 import { queryClient, createPersister } from './src/lib/queryClient';
 import { loadSession } from './src/lib/session';
+import { subscribeLogQueueToNetwork } from './src/lib/logQueue';
 import { useSessionStore } from './src/stores/session';
 import { TabsNavigator } from './src/navigation/TabsNavigator';
 import { AuthGate } from './src/screens/auth/AuthGate';
@@ -74,6 +75,9 @@ function SessionHydrator({ children }: { children: React.ReactNode }) {
 
 function Root() {
   const accessToken = useSessionStore((s) => s.accessToken);
+  useEffect(() => {
+    return subscribeLogQueueToNetwork(queryClient);
+  }, []);
   return (
     <ResponsiveContainer>
       {accessToken ? <TabsNavigator /> : <AuthGate />}

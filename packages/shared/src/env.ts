@@ -20,6 +20,7 @@ export const envSchema = z.object({
   JWT_SECRET: z.string().min(16),
   API_PORT: z.coerce.number().int().positive().default(3000),
 
+  R2_ACCOUNT_ID: optionalString(),
   R2_ACCESS_KEY_ID: optionalString(),
   R2_SECRET_ACCESS_KEY: optionalString(),
   R2_BUCKET: optionalString(),

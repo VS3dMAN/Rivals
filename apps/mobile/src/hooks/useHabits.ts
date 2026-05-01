@@ -8,6 +8,7 @@ export interface TodayHabit {
   graceDays: number;
   completedToday: boolean;
   inGrace: boolean;
+  todayLogId: string | null;
 }
 
 export function useTodayHabitsQuery(groupId: string | null) {

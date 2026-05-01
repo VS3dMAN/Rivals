@@ -5,6 +5,7 @@ import { GroupDashboardScreen } from '../screens/groups/GroupDashboardScreen';
 import { GroupSettingsScreen } from '../screens/groups/GroupSettingsScreen';
 import { CreateGroupScreen } from '../screens/groups/CreateGroupScreen';
 import { JoinGroupScreen } from '../screens/groups/JoinGroupScreen';
+import { CameraScreen } from '../screens/camera/CameraScreen';
 
 export type GroupsStackParamList = {
   GroupsList: undefined;
@@ -12,6 +13,7 @@ export type GroupsStackParamList = {
   GroupSettings: { groupId: string };
   CreateGroup: undefined;
   JoinGroup: { code?: string };
+  CaptureProof: { groupId: string; habitId: string; habitName: string };
 };
 
 const Stack = createNativeStackNavigator<GroupsStackParamList>();
@@ -49,6 +51,15 @@ export function GroupsStack() {
         name="JoinGroup"
         component={JoinGroupScreen}
         options={{ title: 'Join group', presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="CaptureProof"
+        component={CameraScreen}
+        options={{
+          headerShown: false,
+          presentation: 'fullScreenModal',
+          animation: 'slide_from_bottom',
+        }}
       />
     </Stack.Navigator>
   );

@@ -26,7 +26,17 @@ const config: ExpoConfig = {
     favicon: './assets/favicon.png',
     output: 'static',
   },
-  plugins: ['expo-router', 'expo-secure-store'],
+  plugins: [
+    'expo-router',
+    'expo-secure-store',
+    [
+      'expo-camera',
+      {
+        cameraPermission:
+          'Rivals needs your camera to capture live proof photos. Gallery access is never requested.',
+      },
+    ],
+  ],
   experiments: {
     typedRoutes: true,
   },
