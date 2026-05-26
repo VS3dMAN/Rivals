@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, customType } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, jsonb, customType } from 'drizzle-orm/pg-core';
 
 const citext = customType<{ data: string }>({
   dataType() {
@@ -13,6 +13,7 @@ export const users = pgTable('users', {
   email: citext('email').notNull().unique(),
   avatarUrl: text('avatar_url'),
   timezone: text('timezone').notNull().default('UTC'),
+  notificationPrefs: jsonb('notification_prefs').notNull().default('{}'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
 });

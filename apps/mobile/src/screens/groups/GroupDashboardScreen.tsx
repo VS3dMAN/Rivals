@@ -17,8 +17,10 @@ import { theme } from '../../theme';
 import { useGroupQuery } from '../../hooks/useGroups';
 import { useTodayHabitsQuery, useCreateHabit, type TodayHabit } from '../../hooks/useHabits';
 import { useSignedPhotoUrl } from '../../hooks/useSignedPhotoUrl';
-import { ProofPhotoThumbnail } from '@rivals/ui';
+import { ProofPhotoThumbnail, ResponsiveContainer } from '@rivals/ui';
 import type { GroupsStackParamList } from '../../navigation/GroupsStack';
+import { Tooltip } from '../../components/Tooltip';
+import { track } from '../../lib/analytics';
 
 type Nav = NativeStackNavigationProp<GroupsStackParamList, 'GroupDashboard'>;
 type Route = RouteProp<GroupsStackParamList, 'GroupDashboard'>;
@@ -219,6 +221,7 @@ export function GroupDashboardScreen() {
   const habits = habitsQ.data?.habits ?? [];
 
   const onCapture = (habit: TodayHabit) => {
+    track('complete_pressed', { groupId, habitId: habit.id, completedToday: habit.completedToday });
     const go = () =>
       nav.navigate('CaptureProof', {
         groupId,
@@ -241,6 +244,12 @@ export function GroupDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <ResponsiveContainer maxWidth={960}>
+      <Tooltip
+        id="dashboard-complete-button"
+        title="Log your habit"
+        body="Tap Complete on any habit to take a proof photo. Once you've taken it, your streak ticks up."
+      />
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title} numberOfLines={1}>
@@ -250,6 +259,24 @@ export function GroupDashboardScreen() {
             {groupQ.data ? `${groupQ.data.members.length} members` : 'Loading…'}
           </Text>
         </View>
+        <Pressable
+          style={styles.settingsBtn}
+          onPress={() => nav.navigate('Stats', { groupId })}
+        >
+          <Text style={styles.settingsBtnText}>📊</Text>
+        </Pressable>
+        <Pressable
+          style={styles.settingsBtn}
+          onPress={() => nav.navigate('Feed', { groupId })}
+        >
+          <Text style={styles.settingsBtnText}>📰</Text>
+        </Pressable>
+        <Pressable
+          style={styles.settingsBtn}
+          onPress={() => nav.navigate('Leaderboard', { groupId })}
+        >
+          <Text style={styles.settingsBtnText}>🏆</Text>
+        </Pressable>
         <Pressable
           style={styles.settingsBtn}
           onPress={() => nav.navigate('GroupSettings', { groupId })}
@@ -306,6 +333,7 @@ export function GroupDashboardScreen() {
         groupId={groupId}
         onClose={() => setModalOpen(false)}
       />
+      </ResponsiveContainer>
     </SafeAreaView>
   );
 }

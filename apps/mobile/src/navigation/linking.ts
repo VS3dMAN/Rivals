@@ -16,6 +16,7 @@ export const linking: LinkingOptions<ReturnType<typeof Object>> = {
           GroupSettings: 'groups/:groupId/settings',
           CreateGroup: 'groups/new',
           JoinGroup: 'join/:code',
+          JoinLanding: 'invite/:code',
         },
       },
       NotificationsTab: 'inbox',

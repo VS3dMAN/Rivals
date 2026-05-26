@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npx expo:*)",
+      "mcp__claude_ai_Supabase__restore_project",
+      "mcp__claude_ai_Supabase__list_tables",
+      "mcp__claude_ai_Supabase__list_extensions",
+      "Bash(pnpm --filter @rivals/api lint)",
+      "Bash(pnpm --filter @rivals/api test src/modules/push/dispatcher.test.ts)",
+      "Bash(pnpm --filter @rivals/mobile test)",
+      "Bash(pnpm --filter @rivals/ui test)"
+    ]
+  }
+}

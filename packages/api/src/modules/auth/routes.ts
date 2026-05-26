@@ -8,6 +8,7 @@ import {
   usernameAvailableSchema,
   usernameSchema,
 } from '@rivals/shared/zod/auth';
+import { track } from '../../lib/analytics';
 
 interface AuthRouteOptions {
   db: Db;
@@ -36,7 +37,9 @@ const routes: FastifyPluginAsync<AuthRouteOptions> = async (app, opts) => {
   });
 
   // POST /auth/signup
-  app.post('/auth/signup', async (req, reply) => {
+  app.post('/auth/signup', {
+    config: { rateLimit: { max: 5, timeWindow: '1 hour' } },
+  }, async (req, reply) => {
     const body = signupSchema.parse(req.body);
 
     // Pre-check username
@@ -84,6 +87,8 @@ const routes: FastifyPluginAsync<AuthRouteOptions> = async (app, opts) => {
       throw httpError(500, 'SESSION_FAILED', 'Created user but could not create session');
     }
 
+    track('signup_completed', data.user.id, { username: body.username }).catch(() => void 0);
+
     return reply.status(201).send({
       accessToken: sessionData.session.access_token,
       refreshToken: sessionData.session.refresh_token,
@@ -97,7 +102,9 @@ const routes: FastifyPluginAsync<AuthRouteOptions> = async (app, opts) => {
   });
 
   // POST /auth/login
-  app.post('/auth/login', async (req) => {
+  app.post('/auth/login', {
+    config: { rateLimit: { max: 10, timeWindow: '15 minutes' } },
+  }, async (req) => {
     const body = loginSchema.parse(req.body);
     const { data, error } = await supabase.auth.signInWithPassword({
       email: body.email,

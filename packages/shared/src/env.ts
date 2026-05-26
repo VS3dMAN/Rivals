@@ -29,8 +29,19 @@ export const envSchema = z.object({
   SENTRY_DSN: optionalUrl(),
 
   FCM_SERVER_KEY: optionalString(),
+  FCM_PROJECT_ID: optionalString(),
+  FCM_CLIENT_EMAIL: optionalString(),
+  FCM_PRIVATE_KEY: optionalString(),
   APNS_KEY_ID: optionalString(),
   APNS_TEAM_ID: optionalString(),
+
+  POSTHOG_API_KEY: optionalString(),
+  POSTHOG_HOST: optionalUrl(),
+
+  FORCE_HTTPS: z.preprocess(
+    (v) => (v === '' || v === undefined ? undefined : v === 'true' || v === '1'),
+    z.boolean().optional(),
+  ),
 });
 
 export type Env = z.infer<typeof envSchema>;

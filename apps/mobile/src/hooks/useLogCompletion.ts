@@ -5,6 +5,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { track } from '../lib/analytics';
 
 export interface LogCompletionInput {
   groupId: string;
@@ -75,6 +76,13 @@ export function useLogCompletion() {
   return useMutation({
     mutationFn: (input: LogCompletionInput) => runLogCompletion(input, qc),
     retry: 0,
+    onSuccess: (_result, input) => {
+      track('proof_uploaded', { groupId: input.groupId, habitId: input.habitId });
+      if (Platform.OS === 'web') return;
+      import('expo-haptics')
+        .then((H) => H.notificationAsync(H.NotificationFeedbackType.Success))
+        .catch(() => void 0);
+    },
     onError: async (error, input) => {
       // Only enqueue on native and only for network-shaped errors. Validation
       // errors (CLOCK_SKEW, UPLOAD_NOT_FOUND) shouldn't be retried.

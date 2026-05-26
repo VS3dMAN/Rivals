@@ -5,7 +5,11 @@ import { theme } from '../theme';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
+import { NotificationPreferencesScreen } from '../screens/NotificationPreferencesScreen';
+import { BadgesScreen } from '../screens/BadgesScreen';
+import { PrivacyScreen } from '../screens/PrivacyScreen';
 import { GroupsStack } from './GroupsStack';
+import { useUnreadCount } from '../hooks/useNotifications';
 
 const Tab = createBottomTabNavigator();
 
@@ -28,7 +32,36 @@ function makeStack(component: React.ComponentType, title: string) {
 
 const DashboardStack = makeStack(DashboardScreen, 'Today');
 const NotificationsStack = makeStack(NotificationsScreen, 'Notifications');
-const ProfileStack = makeStack(ProfileScreen, 'Profile');
+
+const ProfileStackNav = createNativeStackNavigator();
+function ProfileStack() {
+  return (
+    <ProfileStackNav.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: theme.colors.background },
+        headerTintColor: theme.colors.text,
+        contentStyle: { backgroundColor: theme.colors.background },
+      }}
+    >
+      <ProfileStackNav.Screen name="Profile" component={ProfileScreen} />
+      <ProfileStackNav.Screen
+        name="NotificationPreferences"
+        component={NotificationPreferencesScreen}
+        options={{ title: 'Notification settings' }}
+      />
+      <ProfileStackNav.Screen
+        name="Badges"
+        component={BadgesScreen}
+        options={{ title: 'Badges' }}
+      />
+      <ProfileStackNav.Screen
+        name="Privacy"
+        component={PrivacyScreen}
+        options={{ title: 'Privacy & data' }}
+      />
+    </ProfileStackNav.Navigator>
+  );
+}
 
 function tabIcon(label: string) {
   return function Icon({ color }: { color: string }) {
@@ -37,6 +70,9 @@ function tabIcon(label: string) {
 }
 
 export function TabsNavigator() {
+  const unread = useUnreadCount();
+  const badgeCount = unread.data?.count ?? 0;
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -62,7 +98,12 @@ export function TabsNavigator() {
       <Tab.Screen
         name="NotificationsTab"
         component={NotificationsStack}
-        options={{ title: 'Inbox', tabBarIcon: tabIcon('N') }}
+        options={{
+          title: 'Inbox',
+          tabBarIcon: tabIcon('N'),
+          tabBarBadge: badgeCount > 0 ? badgeCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: theme.colors.accent, color: '#0B1220' },
+        }}
       />
       <Tab.Screen
         name="ProfileTab"

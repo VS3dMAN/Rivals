@@ -8,6 +8,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMutation } from '@tanstack/react-query';
@@ -23,10 +24,14 @@ export function SignUpScreen({ onSwitch }: { onSwitch: () => void }) {
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [consented, setConsented] = useState(false);
   const setSession = useSessionStore((s) => s.setSession);
 
   const mut = useMutation({
     mutationFn: async () => {
+      if (!consented) {
+        throw new Error('You must agree to the Privacy Policy and Terms to sign up');
+      }
       const parsed = signupSchema.safeParse({ email, password, username, displayName });
       if (!parsed.success) {
         throw new Error(parsed.error.issues[0]?.message ?? 'Invalid input');
@@ -87,15 +92,38 @@ export function SignUpScreen({ onSwitch }: { onSwitch: () => void }) {
             onChangeText={setDisplayName}
           />
 
+          <Pressable
+            onPress={() => setConsented((c) => !c)}
+            style={styles.consentRow}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: consented }}
+            accessibilityLabel="Agree to privacy policy and terms of service"
+          >
+            <View style={[styles.checkbox, consented && styles.checkboxChecked]}>
+              {consented ? <Text style={styles.checkboxMark}>✓</Text> : null}
+            </View>
+            <Text style={styles.consentText}>
+              I agree to the{' '}
+              <Text style={styles.link} onPress={() => Linking.openURL('https://rivals.app/privacy')}>
+                Privacy Policy
+              </Text>{' '}
+              and{' '}
+              <Text style={styles.link} onPress={() => Linking.openURL('https://rivals.app/terms')}>
+                Terms of Service
+              </Text>
+              .
+            </Text>
+          </Pressable>
+
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Pressable
-            style={[styles.btn, styles.btnPrimary]}
+            style={[styles.btn, styles.btnPrimary, !consented && styles.btnDisabled]}
             onPress={() => {
               setError(null);
               mut.mutate();
             }}
-            disabled={mut.isPending}
+            disabled={mut.isPending || !consented}
           >
             <Text style={styles.btnText}>
               {mut.isPending ? 'Creating…' : 'Create account'}
@@ -126,7 +154,28 @@ const styles = StyleSheet.create({
   },
   btn: { padding: theme.spacing.md, borderRadius: theme.radius.md, alignItems: 'center' },
   btnPrimary: { backgroundColor: theme.colors.accent, marginTop: theme.spacing.md },
+  btnDisabled: { opacity: 0.5 },
   btnText: { ...theme.typography.heading, color: '#0B1220' },
+  consentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  checkboxChecked: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
+  checkboxMark: { color: '#0B1220', fontWeight: '700' },
+  consentText: { ...theme.typography.caption, color: theme.colors.textMuted, flex: 1 },
   error: { color: theme.colors.danger, ...theme.typography.caption },
   link: {
     ...theme.typography.body,

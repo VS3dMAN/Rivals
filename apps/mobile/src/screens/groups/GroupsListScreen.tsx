@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator, Image }
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useBreakpoint } from '@rivals/ui';
 import { theme } from '../../theme';
 import { useGroupsQuery, type GroupSummary } from '../../hooks/useGroups';
 import type { GroupsStackParamList } from '../../navigation/GroupsStack';
@@ -70,6 +71,8 @@ export function GroupsListScreen() {
   const nav = useNavigation<Nav>();
   const query = useGroupsQuery();
   const groups = query.data?.groups ?? [];
+  const bp = useBreakpoint();
+  const numColumns = bp === 'lg' ? 3 : bp === 'md' ? 2 : 1;
 
   if (query.isLoading) {
     return (
@@ -84,14 +87,19 @@ export function GroupsListScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <FlatList
+        key={`cols-${numColumns}`}
+        numColumns={numColumns}
+        columnWrapperStyle={numColumns > 1 ? { gap: theme.spacing.sm } : undefined}
         contentContainerStyle={groups.length === 0 ? styles.emptyContainer : styles.listContainer}
         data={groups}
         keyExtractor={(g) => g.id}
         renderItem={({ item }) => (
-          <GroupRow
-            group={item}
-            onPress={() => nav.navigate('GroupDashboard', { groupId: item.id })}
-          />
+          <View style={numColumns > 1 ? { flex: 1 } : undefined}>
+            <GroupRow
+              group={item}
+              onPress={() => nav.navigate('GroupDashboard', { groupId: item.id })}
+            />
+          </View>
         )}
         ListEmptyComponent={
           <EmptyState

@@ -1,0 +1,847 @@
+================================================================================
+RIVALS — MANUAL DEVELOPER TASKS TO CLOSE OUT PHASES 01–04
+================================================================================
+Generated: May 1, 2026
+Status: All code is written. Everything below is provisioning, configuration,
+        and manual testing that only a developer with dashboard access can do.
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+TASK 1 — CREATE CLOUDFLARE R2 BUCKET AND FILL IN CREDENTIALS
+Priority: CRITICAL — the entire photo upload pipeline will crash without this
+────────────────────────────────────────────────────────────────────────────────
+
+The app uses Cloudflare R2 (S3-compatible object storage) to store proof photos.
+The bucket does not exist yet, and the four environment variables that the API
+needs to talk to R2 are all blank in the .env file. Until this is done, any
+attempt to complete a habit (which takes a photo) will throw a runtime error.
+
+STEP 1 — Log in to Cloudflare
+  Go to https://dash.cloudflare.com and sign in with your Cloudflare account.
+  If you do not have an account, create one at cloudflare.com — the R2 free
+  tier includes 10 GB storage and 1 million class-A operations per month, which
+  is more than enough for early development and staging.
+
+STEP 2 — Navigate to R2
+  In the left sidebar, click "R2 Object Storage". If you have not used R2
+  before, you may be asked to enable it for your account. Do so — it does not
+  require a paid plan for the free tier.
+
+STEP 3 — Create the bucket
+  Click the "Create bucket" button in the top right.
+  For the bucket name, enter exactly: rivals-proofs
+  (The name must match what you will put in R2_BUCKET env var.)
+  Leave the location as "Automatic" unless you have a reason to pin a region.
+  Click "Create bucket".
+
+STEP 4 — Configure CORS on the bucket
+  After the bucket is created, click on it to open its settings.
+  Go to the "Settings" tab inside the bucket.
+  Scroll down to "CORS policy" and click "Add CORS policy".
+  Add the following rule:
+
+    Allowed origins:  * (use * for staging; restrict to your domain in prod)
+    Allowed methods:  PUT, GET, HEAD
+    Allowed headers:  Content-Type, Content-Length
+    Max age seconds:  3600
+
+  Save the CORS policy.
+  Without this, the mobile app's direct PUT upload to R2 will be blocked by
+  the browser/OS with a CORS error.
+
+STEP 5 — Enable public access (for signed GET URLs)
+  Still in the bucket Settings tab, find "R2.dev subdomain" and toggle it ON.
+  Cloudflare will assign a public URL like:
+    https://pub-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.r2.dev
+  Copy this URL — it will become your R2_PUBLIC_BASE_URL env var.
+
+STEP 6 — Create an API token for the bucket
+  Go back to the R2 overview page (not inside a bucket).
+  In the top right, click "Manage R2 API Tokens".
+  Click "Create API Token".
+  Give it a name like "rivals-api-staging".
+  Under Permissions, select "Object Read & Write".
+  Under "Specify bucket(s)", select "rivals-proofs" specifically (do not give
+  it access to all buckets for security).
+  Click "Create API Token".
+
+  On the next screen, Cloudflare will show you three values ONCE. Copy all three
+  immediately — you cannot view the secret again:
+    - Access Key ID      (looks like a 32-char alphanumeric string)
+    - Secret Access Key  (looks like a 64-char string)
+    - Account ID         (shown at the top of the R2 dashboard, also a hex ID)
+
+STEP 7 — Fill in the .env file
+  Open the file: packages/api/.env
+  Find the four R2 lines (currently empty) and fill them in:
+
+    R2_ACCOUNT_ID=<the Account ID from step 6>
+    R2_ACCESS_KEY_ID=<the Access Key ID from step 6>
+    R2_SECRET_ACCESS_KEY=<the Secret Access Key from step 6>
+    R2_PUBLIC_BASE_URL=https://pub-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.r2.dev
+    R2_BUCKET=rivals-proofs
+
+  Save the file.
+
+STEP 8 — Add the same secrets to your Railway staging environment
+  Go to your Railway project dashboard.
+  Click on the API service → Variables tab.
+  Add each of the five R2 variables above as environment variables.
+  Railway will automatically redeploy the service after you save.
+
+STEP 9 — Verify the connection
+  After the API redeploys, hit this endpoint to confirm R2 is reachable:
+    GET https://your-api-url.up.railway.app/health
+  The health check should return 200. Then try completing a habit with a photo
+  on the mobile app — the upload should succeed end-to-end.
+
+
+────────────────────────────────────────────────────────────────────────────────
+TASK 2 — CREATE THE SUPABASE AVATARS STORAGE BUCKET
+Priority: CRITICAL — user and group avatar uploads will silently fail without it
+────────────────────────────────────────────────────────────────────────────────
+
+The app allows users to upload a profile avatar and group admins to upload a
+group icon. Both are stored in Supabase Storage in a bucket called "avatars".
+This bucket must be created manually through the Supabase dashboard — it is not
+created by the database migration scripts.
+
+STEP 1 — Log in to Supabase
+  Go to https://supabase.com/dashboard and sign in.
+  Select your project (the one named "rivals-staging" or similar).
+
+STEP 2 — Navigate to Storage
+  In the left sidebar, click "Storage".
+
+STEP 3 — Create the bucket
+  Click "New bucket" in the top right.
+  Enter the bucket name: avatars
+  Toggle "Public bucket" to ON. This allows anyone to view avatar images via
+  a public URL without authentication, which is correct — avatars are not
+  private content.
+  Click "Save".
+
+STEP 4 — Add an RLS policy for uploads
+  After creating the bucket, click on it.
+  Click the "Policies" tab.
+  Click "New policy" → "For full customization".
+  Create a policy with these settings:
+    Policy name:    allow_authenticated_upload
+    Allowed operations: INSERT
+    Target roles:   authenticated
+    Policy definition (USING expression):
+      bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]
+
+  This means a user can only upload to a path that starts with their own user ID,
+  like: <user_id>/profile.jpg or <user_id>/group-123.jpg
+  Click "Review" then "Save policy".
+
+STEP 5 — Add a policy for updates (re-uploading an avatar)
+  Click "New policy" again.
+    Policy name:    allow_authenticated_update
+    Allowed operations: UPDATE
+    Target roles:   authenticated
+    USING expression:
+      bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]
+  Save it.
+
+STEP 6 — Confirm the public read policy
+  Because the bucket is public, Supabase automatically allows SELECT (read).
+  Verify there is a policy for SELECT that allows "public" or "anon" role.
+  If not, create one:
+    Policy name:    allow_public_read
+    Allowed operations: SELECT
+    Target roles:   public
+    USING expression: bucket_id = 'avatars'
+  Save it.
+
+STEP 7 — Note the public URL format
+  In the bucket overview, Supabase shows the base URL for public files.
+  It looks like:
+    https://<project-id>.supabase.co/storage/v1/object/public/avatars/<path>
+  This format is what the app uses to display avatar images. No additional
+  configuration is needed — Supabase handles it automatically for public buckets.
+
+
+────────────────────────────────────────────────────────────────────────────────
+TASK 3 — FILL IN THE DATABASE_URL PASSWORD
+Priority: CRITICAL — the API cannot connect to Postgres without this
+────────────────────────────────────────────────────────────────────────────────
+
+The file packages/api/.env currently has this line:
+  DATABASE_URL=postgresql://postgres:PASTE_DB_PASSWORD@db.<project-ref>.supabase.co:5432/postgres
+
+The password is a placeholder. The API will fail to start if this is not filled in.
+
+STEP 1 — Go to your Supabase project
+  Open https://supabase.com/dashboard → select your project.
+
+STEP 2 — Navigate to the database connection string
+  Click "Settings" in the left sidebar → then "Database".
+  Scroll down to "Connection string".
+  Switch the tab to "URI" format.
+
+STEP 3 — Choose the right connection mode
+  If you are deploying the API to Railway (which uses a persistent Node.js process
+  with a connection pool), use the "Session mode" connection string on port 5432.
+  If Railway is configured to use PgBouncer, use "Transaction mode" on port 6543.
+  For a basic Fastify app without PgBouncer, use port 5432 (Session mode).
+
+STEP 4 — Copy the full URI
+  The URI will look like:
+    postgresql://postgres:[YOUR-PASSWORD]@db.abcdefghijk.supabase.co:5432/postgres
+  Copy the entire string — it includes your actual database password.
+
+STEP 5 — Paste it into .env
+  Open packages/api/.env
+  Replace the placeholder line with the full URI you just copied:
+    DATABASE_URL=postgresql://postgres:actualpassword@db.xxxx.supabase.co:5432/postgres
+  Save the file.
+
+STEP 6 — Add it to Railway as well
+  Go to Railway → your API service → Variables tab.
+  Add or update DATABASE_URL with the same value.
+  Alternatively, use the "Direct database URL" from Supabase if Railway has
+  its own Postgres addon (unlikely if you are using Supabase).
+
+
+────────────────────────────────────────────────────────────────────────────────
+TASK 4 — ENABLE pg_cron AND ACTIVATE CHALLENGE TRANSITION JOBS
+Priority: CRITICAL — challenge windows will never auto-complete without this
+────────────────────────────────────────────────────────────────────────────────
+
+The app has three leaderboard modes: Streak, Total Completions, and Challenge
+Window. In Challenge Window mode, an admin creates a time-bounded competition.
+The system needs to automatically move windows from "upcoming" to "active" at
+their start date, and from "active" to "completed" at their end date, then
+declare a winner. This is handled by two pg_cron jobs defined in the file:
+  packages/api/src/jobs/challenge-transitions.sql
+
+These jobs are NOT active yet. Until they are, challenge windows are stuck in
+whatever status they were created with and winners are never declared.
+
+STEP 1 — Enable the pg_cron extension in Supabase
+  Go to your Supabase project dashboard.
+  Click "Database" in the left sidebar → then "Extensions".
+  In the search box, type: pg_cron
+  You will see "pg_cron" in the results. Click the toggle to enable it.
+  Supabase will install it automatically. This may take 10–20 seconds.
+
+STEP 2 — Open the SQL file in your code editor
+  Open the file: packages/api/src/jobs/challenge-transitions.sql
+  Read through it to understand the two jobs it creates:
+    Job 1 (challenge-activate): runs at the top of every hour (0 * * * *)
+      Finds challenge windows where start_date <= today and status = 'upcoming'
+      Updates their status to 'active'
+      Inserts a feed_event of kind 'window_start' for the group
+    Job 2 (challenge-complete): runs at 5 minutes past every hour (5 * * * *)
+      Finds challenge windows where end_date < today and status = 'active'
+      Determines the winner (highest score, with tie-breaking rules)
+      Updates status to 'completed', sets winner_user_id
+      Awards a 'window_winner' badge to the winner
+      Inserts a feed_event of kind 'window_end' for the group
+
+STEP 3 — Run the SQL in Supabase SQL Editor
+  In your Supabase project, click "SQL Editor" in the left sidebar.
+  Click "New query".
+  Open the file packages/api/src/jobs/challenge-transitions.sql in your editor.
+  Select all the contents and copy them.
+  Paste the SQL into the Supabase SQL Editor.
+  Click "Run" (or press Ctrl+Enter / Cmd+Enter).
+  You should see a success message — no rows affected is normal.
+
+STEP 4 — Verify the jobs were registered
+  In the SQL Editor, run this query:
+    SELECT jobid, jobname, schedule, command FROM cron.job;
+  You should see two rows:
+    challenge-activate    0 * * * *    <the activation SQL>
+    challenge-complete    5 * * * *    <the completion SQL>
+  If you see them, the cron jobs are live and will run automatically.
+
+STEP 5 — If you need to update or re-run the jobs
+  If you run the SQL again and get a "job already exists" error, first delete
+  the existing jobs with:
+    SELECT cron.unschedule('challenge-activate');
+    SELECT cron.unschedule('challenge-complete');
+  Then re-run the full SQL from challenge-transitions.sql.
+
+STEP 6 — Monitor job runs
+  After an hour, you can check if the jobs have run with:
+    SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;
+  This shows the last 10 cron executions, their status, and any error messages.
+
+
+────────────────────────────────────────────────────────────────────────────────
+TASK 5 — RUN THE LEADERBOARD BACKFILL SCRIPT
+Priority: CRITICAL — must be done after deploying task 04 code to staging
+────────────────────────────────────────────────────────────────────────────────
+
+The leaderboard and streak computation system was added in task 04. Any habit
+logs that users created before task 04 was deployed are not reflected in the
+leaderboard_scores or streaks tables — those rows were never computed because
+the code did not exist yet. Every user who logged a habit before this deploy
+will appear with score = 0 on the leaderboard, even if they have a long streak.
+
+A one-shot backfill script exists at:
+  packages/api/src/scripts/backfill-leaderboard.ts
+
+This script iterates over every (user, group) membership pair, calls the same
+recomputeScores function that the live log endpoint uses, and upserts the results
+into streaks and leaderboard_scores. It is safe to run multiple times (idempotent).
+
+STEP 1 — Make sure the API code is deployed first
+  This script must be run AFTER the task 04 code (leaderboard module) is live.
+  If you run it before the code is deployed, nothing in the database will have
+  changed and the script will still work, but the live API endpoints won't exist
+  yet to serve the results.
+
+STEP 2 — Make sure DATABASE_URL is set in your local environment
+  The script connects to the database directly. Before running it, ensure your
+  local shell has DATABASE_URL set to the Supabase connection string (same value
+  as in packages/api/.env from Task 3).
+  You can either export it in your terminal:
+    export DATABASE_URL="postgresql://postgres:password@db.xxx.supabase.co:5432/postgres"
+  Or the script will pick it up automatically if your .env file is correct and
+  the project's dotenv loading is set up (check the package.json scripts section).
+
+STEP 3 — Run the script from the project root
+  Open your terminal in the e:\Builds\Rivals directory and run:
+    pnpm --filter @rivals/api run backfill:leaderboard
+
+  If that command doesn't exist yet, you can run it directly with ts-node:
+    pnpm --filter @rivals/api exec ts-node src/scripts/backfill-leaderboard.ts
+
+  The script will print progress as it processes each membership pair. If there
+  are no users yet (fresh staging environment), it will complete immediately
+  with 0 rows processed — that is fine.
+
+STEP 4 — Verify the results
+  After the script completes, open the Supabase SQL Editor and run:
+    SELECT COUNT(*) FROM leaderboard_scores WHERE score > 0;
+    SELECT COUNT(*) FROM streaks WHERE current_streak > 0;
+  If users have logged habits, both counts should be greater than 0.
+  Also open the app and check the leaderboard for a group — scores should now
+  appear correctly instead of all being 0.
+
+STEP 5 — You only need to run this once
+  After the initial backfill, every new habit log triggers recomputeScores
+  automatically inside the POST /logs transaction. So going forward, scores
+  stay up to date in real time. This script is only for the historical data
+  that existed before task 04 was deployed.
+
+
+────────────────────────────────────────────────────────────────────────────────
+TASK 6 — ADD GITHUB ACTIONS SECRETS TO THE REPOSITORY
+Priority: HIGH — CI/CD pipelines will fail on every push without these
+────────────────────────────────────────────────────────────────────────────────
+
+The project has three GitHub Actions workflows:
+  .github/workflows/ci.yml          — linting, typechecking, and tests
+  .github/workflows/deploy-api.yml  — deploys the API to Railway on push to main
+  .github/workflows/deploy-web.yml  — deploys the web app to Cloudflare Pages
+
+These workflows reference secrets that must be added to the GitHub repository
+manually. Without them, every push to main will fail in CI and nothing will
+auto-deploy.
+
+STEP 1 — Navigate to your repository secrets
+  Go to your GitHub repository page.
+  Click "Settings" tab at the top.
+  In the left sidebar, click "Secrets and variables" → "Actions".
+  Click "New repository secret" for each secret below.
+
+STEP 2 — RAILWAY_TOKEN (for API auto-deploy)
+  This allows GitHub Actions to trigger a Railway deployment.
+  Where to get it:
+    - Go to https://railway.app/dashboard
+    - Click your account avatar in the top right → "Account Settings"
+    - Click "Tokens" in the left sidebar
+    - Click "New Token", give it a name like "github-actions"
+    - Copy the token value immediately (it is only shown once)
+  Add it as a secret named: RAILWAY_TOKEN
+
+STEP 3 — CLOUDFLARE_API_TOKEN (for web app deploy to Cloudflare Pages)
+  This allows GitHub Actions to deploy the web build to Cloudflare Pages.
+  Where to get it:
+    - Go to https://dash.cloudflare.com
+    - Click your account name in the top right → "My Profile"
+    - Click "API Tokens" in the left sidebar
+    - Click "Create Token"
+    - Use the "Edit Cloudflare Workers" template OR create a custom token with:
+        Permissions: Cloudflare Pages — Edit
+        Zone Resources: All zones (or the specific zone if you have a domain)
+    - Click "Create Token" and copy the value
+  Add it as a secret named: CLOUDFLARE_API_TOKEN
+
+STEP 4 — CLOUDFLARE_ACCOUNT_ID (for Cloudflare Pages)
+  Where to get it:
+    - In the Cloudflare dashboard, go to the main overview page
+    - In the right sidebar, you will see "Account ID" — copy it
+    OR:
+    - Any Cloudflare page URL contains your account ID in the path:
+      https://dash.cloudflare.com/<account-id>/...
+  Add it as a secret named: CLOUDFLARE_ACCOUNT_ID
+
+STEP 5 — EXPO_PUBLIC_API_URL (the Railway API URL for mobile builds)
+  This is the public URL of your deployed API server.
+  Where to get it:
+    - Go to your Railway project dashboard
+    - Click on the API service
+    - Click "Settings" → under "Domains", copy the auto-generated URL
+      It looks like: https://rivals-api-production.up.railway.app
+    - If you have not deployed yet, deploy first, then come back for this URL
+  Add it as a secret named: EXPO_PUBLIC_API_URL
+  (The EXPO_PUBLIC_ prefix makes it available in the Expo/React Native build)
+
+STEP 6 — EXPO_PUBLIC_SUPABASE_URL
+  Where to get it:
+    - Supabase Dashboard → your project → Settings → API
+    - Under "Project URL", copy the full URL
+      It looks like: https://abcdefghijk.supabase.co
+  Add it as a secret named: EXPO_PUBLIC_SUPABASE_URL
+
+STEP 7 — EXPO_PUBLIC_SUPABASE_ANON_KEY
+  Where to get it:
+    - Same page as above: Supabase → Settings → API
+    - Under "Project API keys", copy the "anon public" key
+      It is a long JWT string starting with "eyJ..."
+  Add it as a secret named: EXPO_PUBLIC_SUPABASE_ANON_KEY
+
+STEP 8 — EXPO_PUBLIC_SENTRY_DSN (optional but recommended)
+  Sentry is used for error tracking. If you skip this, the app will still work
+  but errors won't be captured in Sentry.
+  Where to get it:
+    - Go to https://sentry.io and log in (or create an account)
+    - Create a new project → select "React Native"
+    - After creating, go to Settings → Projects → your project → Client Keys (DSN)
+    - Copy the DSN (looks like: https://abc123@o123456.ingest.sentry.io/789)
+  Add it as a secret named: EXPO_PUBLIC_SENTRY_DSN
+
+STEP 9 — Verify secrets are registered
+  After adding all secrets, go back to Settings → Secrets → Actions.
+  You should see all 7 secrets listed (with their names, not values).
+  Push a small commit to the main branch and watch the Actions tab to confirm
+  that ci.yml and deploy-api.yml both succeed.
+
+
+────────────────────────────────────────────────────────────────────────────────
+TASK 7 — ADD IMAGE PICKER TO THE CREATE GROUP SCREEN
+Priority: MEDIUM — this requires a code change; current UX is a plain text input
+────────────────────────────────────────────────────────────────────────────────
+
+Right now, the CreateGroupScreen (apps/mobile/src/screens/groups/CreateGroupScreen.tsx)
+has a plain text input field where the admin types or pastes an avatar URL for
+the group. This is not acceptable UX for a mobile app. The correct flow is:
+  1. Admin taps an avatar placeholder or camera icon
+  2. Image picker opens (photo library or camera)
+  3. Selected image is uploaded to Supabase Storage (avatars bucket)
+  4. The returned public URL is set automatically as the group's avatarUrl
+
+This requires writing code. Here is exactly what needs to be done:
+
+STEP 1 — Install expo-image-picker (if not already installed)
+  In your terminal at the project root, run:
+    pnpm --filter @rivals/mobile add expo-image-picker
+  Then rebuild the Expo dev client if you are using a development build:
+    npx expo run:ios --device
+    (or the Android equivalent)
+  Note: expo-image-picker is part of the Expo SDK and should work without
+  native rebuilds if you are using Expo Go, but if you have a custom dev
+  client, a rebuild is needed.
+
+STEP 2 — Update app.config.ts to add the photo library permission
+  Open apps/mobile/app.config.ts
+  Under the "ios" section, add to infoPlist:
+    NSPhotoLibraryUsageDescription: "Choose a photo for your group avatar"
+  Under the "android" section, add to permissions:
+    "READ_MEDIA_IMAGES"
+  This is required for iOS and Android to show the permission dialog.
+
+STEP 3 — Modify CreateGroupScreen.tsx
+  Open: apps/mobile/src/screens/groups/CreateGroupScreen.tsx
+  Replace the plain text avatarUrl input with this flow:
+
+  a) Add state for the local image URI:
+       const [avatarUri, setAvatarUri] = useState<string | null>(null);
+       const [uploading, setUploading] = useState(false);
+
+  b) Add a function to pick and upload the image:
+       async function pickAndUploadAvatar() {
+         const result = await ImagePicker.launchImageLibraryAsync({
+           mediaTypes: ImagePicker.MediaTypeOptions.Images,
+           allowsEditing: true,
+           aspect: [1, 1],
+           quality: 0.8,
+         });
+         if (result.canceled) return;
+         const uri = result.assets[0].uri;
+         setAvatarUri(uri);
+         setUploading(true);
+         try {
+           const ext = uri.split('.').pop() ?? 'jpg';
+           const path = `${supabase.auth.getUser()?.data.user?.id}/group-${Date.now()}.${ext}`;
+           const blob = await (await fetch(uri)).blob();
+           const { error } = await supabase.storage.from('avatars').upload(path, blob, {
+             contentType: `image/${ext}`,
+             upsert: true,
+           });
+           if (error) throw error;
+           const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+           setValue('avatarUrl', data.publicUrl);
+         } catch (e) {
+           Alert.alert('Upload failed', 'Could not upload avatar. Try again.');
+         } finally {
+           setUploading(false);
+         }
+       }
+
+  c) Replace the text input in the JSX with a tappable avatar preview:
+       <TouchableOpacity onPress={pickAndUploadAvatar} disabled={uploading}>
+         {avatarUri ? (
+           <Image source={{ uri: avatarUri }} style={styles.avatarPreview} />
+         ) : (
+           <View style={styles.avatarPlaceholder}>
+             <Text style={styles.avatarPlaceholderText}>
+               {uploading ? 'Uploading...' : 'Tap to add group photo'}
+             </Text>
+           </View>
+         )}
+       </TouchableOpacity>
+
+  d) Add the necessary styles to the StyleSheet at the bottom of the file:
+       avatarPreview: { width: 100, height: 100, borderRadius: 50 },
+       avatarPlaceholder: {
+         width: 100, height: 100, borderRadius: 50,
+         backgroundColor: '#1e2a3a', alignItems: 'center',
+         justifyContent: 'center', borderWidth: 1, borderColor: '#f59e0b',
+       },
+       avatarPlaceholderText: { color: '#f59e0b', fontSize: 12, textAlign: 'center' },
+
+STEP 4 — Test the flow
+  Run the app on a simulator or real device.
+  Navigate to Groups → Create Group.
+  Tap the avatar placeholder → image picker should open.
+  Select a photo → it should upload and show a preview thumbnail.
+  Fill in the group name and tap Create → the group should be created with
+  the uploaded avatar URL stored in the database.
+
+
+────────────────────────────────────────────────────────────────────────────────
+TASK 8 — MANUAL TEST: LEADERBOARD MODE SWITCHER PERSISTS CORRECTLY
+Priority: MEDIUM — must be verified to confirm task 04.5 is truly complete
+────────────────────────────────────────────────────────────────────────────────
+
+The leaderboard mode switcher is implemented in GroupSettingsScreen.tsx and
+calls the useUpdateGroupMode hook. The UI exists, the API endpoint exists, but
+this flow was never manually tested end-to-end. You need to confirm that:
+  a) Changing the mode in settings actually saves to the database
+  b) The leaderboard screen immediately reflects the new mode
+  c) The mode persists after killing and reopening the app
+
+STEP 1 — Set up the test environment
+  Make sure you have a group with at least 2 members and at least one habit log
+  so that the leaderboard shows real data. If you are testing alone, create two
+  test accounts and have both join the same group and log a habit.
+
+STEP 2 — Open the group as admin
+  Log in with the account that created the group (the admin).
+  Navigate to Groups → tap your group → you should be on the Group Dashboard.
+
+STEP 3 — Check the current leaderboard mode
+  Tap into the Leaderboard screen. Note the current mode shown in the mode pill
+  at the top (it should say either "🔥 Streak", "📊 Total", or "🏆 Challenge").
+
+STEP 4 — Change the mode
+  Go back to the Group Dashboard → tap the settings icon (or navigate to Group
+  Settings from the header).
+  Find the "Leaderboard Mode" section.
+  Tap a different mode — for example, if it shows "Streak", switch to "Total".
+  Confirm any save action if the UI requires it.
+
+STEP 5 — Verify the leaderboard updated
+  Navigate back to the Leaderboard screen.
+  The mode pill at the top should now show the new mode you selected.
+  The scores shown should be different — Streak mode shows current streak count,
+  while Total mode shows the total number of completed logs.
+
+STEP 6 — Verify it persists after restarting the app
+  Force-close the app completely (swipe it away from the app switcher).
+  Reopen the app.
+  Navigate to the same group's Leaderboard screen.
+  The mode should still be the one you selected — not reverted to the default.
+  If it reverted, the PATCH /groups/:id endpoint is not saving the leaderboard
+  mode field, which is a bug to fix.
+
+STEP 7 — Verify non-admins cannot change the mode
+  Log in as a non-admin member of the same group.
+  Navigate to Group Settings.
+  The leaderboard mode switcher should not appear, or should appear grayed out
+  and non-interactive.
+
+
+────────────────────────────────────────────────────────────────────────────────
+TASK 9 — MANUAL END-TO-END SMOKE TEST: LOG → LEADERBOARD UPDATE
+Priority: MEDIUM — confirms the entire task 03 + 04 integration works together
+────────────────────────────────────────────────────────────────────────────────
+
+No integration tests exist that cover the full flow from logging a habit photo
+all the way through to the leaderboard updating. This test must be done manually
+in a real or simulated environment. It validates tasks 03.2, 03.5, 04.2, 04.4,
+and 04.5 all working together.
+
+STEP 1 — Prepare two test accounts
+  You need two user accounts in the same group for the leaderboard to be
+  meaningful (the empty state shows if < 2 members). If you only have one device,
+  you can use a simulator for the second account.
+  Both accounts must be members of the same group.
+  The group must have at least one active habit.
+
+STEP 2 — Check initial leaderboard state
+  On Account A, open the group's Leaderboard screen.
+  Note the current score for Account A. It might be 0 or some existing number.
+  Take a mental note (or screenshot) of the current state.
+
+STEP 3 — Complete a habit with a photo
+  On Account A, navigate to the Group Dashboard.
+  Tap "Complete" on one of the habit cards.
+  The camera should open (full-screen, no gallery button visible).
+  Take a photo by tapping the shutter button.
+  You should see a preview with a watermark overlay showing:
+    - Today's date and time
+    - Your username
+    - The habit name
+  Confirm the photo (tap "Submit" or the check button).
+  Wait for the upload to complete — you should see a success toast.
+
+STEP 4 — Verify the log was created
+  On the Group Dashboard, the habit you just completed should now show as
+  checked/completed with a green indicator or checkmark.
+
+STEP 5 — Check leaderboard update (polling path)
+  Go back to the Leaderboard screen on Account A.
+  Wait up to 60 seconds (the polling interval). The leaderboard should refresh
+  automatically and Account A's score should have increased by 1 (in Total mode)
+  or show an updated streak (in Streak mode).
+  If 60 seconds feels too long for testing, use pull-to-refresh instead.
+
+STEP 6 — Check leaderboard update (pull-to-refresh path)
+  Immediately after logging the habit, go to the Leaderboard and pull down
+  to trigger a manual refresh. The score should update right away without
+  waiting for the 60-second poll.
+
+STEP 7 — Test all three leaderboard modes
+  Change the group's leaderboard mode to each of the three options and verify
+  the leaderboard renders correctly in each:
+
+  Streak mode:
+    Account A's score should equal their current streak (number of consecutive
+    days they have completed all group habits). If today is day 1, score = 1.
+
+  Total mode:
+    Account A's score should equal the total number of habit logs they have
+    submitted since joining the group (not just today). Each log = +1.
+
+  Challenge Window mode:
+    First, create an active challenge window (see Task 10 below).
+    Account A's score should equal logs submitted within the challenge window
+    date range only. Logs from before the window start date do not count.
+
+STEP 8 — Test the minimum members gate
+  Create a new group with only one member (yourself).
+  Navigate to that group's Leaderboard screen.
+  You should see an empty state message like "Waiting for Rivals..." rather
+  than a leaderboard with a single entry.
+
+
+────────────────────────────────────────────────────────────────────────────────
+TASK 10 — MANUAL TEST: CHALLENGE WINDOW LIFECYCLE WITH CRON JOBS
+Priority: MEDIUM — confirms task 04.3 (challenge windows + pg_cron) works
+────────────────────────────────────────────────────────────────────────────────
+
+This test verifies that challenge windows correctly move through their lifecycle:
+  upcoming → active → completed
+and that a winner is declared and badge awarded when the window ends.
+
+This test REQUIRES Task 4 (pg_cron jobs) to be completed first.
+
+STEP 1 — Create a challenge window starting today
+  Log in as a group admin.
+  Navigate to the group → tap into the "Past Challenges" or "Challenges" tab.
+  Tap "Create Challenge".
+  Fill in:
+    Name: Test Challenge
+    Start date: today's date
+    End date: 2 days from today (minimum window length)
+  Submit the form.
+  The API should create the window with status = 'active' (since start_date
+  is today, the code sets it to active immediately, not upcoming).
+  Verify in the UI that the new challenge shows as "ACTIVE".
+
+STEP 2 — Create a challenge window starting tomorrow
+  Create a second challenge window:
+    Name: Future Challenge
+    Start date: tomorrow's date
+    End date: 3 days from today
+  This one should be created with status = 'upcoming'.
+  Verify in the UI that it shows as "UPCOMING".
+
+STEP 3 — Verify the active window appears in leaderboard
+  Switch the group's leaderboard mode to "Challenge Window" (via Group Settings).
+  Navigate to the Leaderboard screen.
+  You should see a countdown banner at the top showing how many days/hours
+  remain until "Test Challenge" ends.
+  The scores shown should only count logs from today onward (the window start).
+
+STEP 4 — Wait for pg_cron to activate the upcoming window
+  At the top of the next hour, pg_cron's "challenge-activate" job runs.
+  After it fires, the "Future Challenge" should change from "UPCOMING" to "ACTIVE".
+  To verify: pull-to-refresh the Challenges screen or wait for the next poll.
+  You can also check immediately in Supabase SQL Editor:
+    SELECT name, status, start_date, end_date FROM challenge_windows
+    ORDER BY created_at DESC;
+
+STEP 5 — Simulate a window completion (for testing without waiting days)
+  You do not need to wait for the actual end_date. To test completion immediately:
+  a) Open Supabase SQL Editor.
+  b) Find the ID of your "Test Challenge" window:
+       SELECT id, name, status, end_date FROM challenge_windows;
+  c) Manually set its end_date to yesterday:
+       UPDATE challenge_windows
+       SET end_date = CURRENT_DATE - INTERVAL '1 day'
+       WHERE name = 'Test Challenge';
+  d) Wait until 5 minutes past the next hour (when the challenge-complete cron fires).
+     OR manually trigger the cron logic by running the completion SQL directly
+     from challenge-transitions.sql in the SQL Editor.
+
+STEP 6 — Verify the completion results
+  After the window is completed:
+  a) The challenge should show as "COMPLETED" in the Challenges UI.
+  b) The Challenges screen should show a winner name or "No winner declared".
+  c) In the Supabase database, verify:
+       SELECT winner_user_id, completed_at FROM challenge_windows
+       WHERE name = 'Test Challenge';
+     This should have a non-null winner_user_id if at least one person logged
+     a habit during the window.
+  d) Check the feed_events table for a 'window_end' event:
+       SELECT * FROM feed_events WHERE kind = 'window_end' ORDER BY created_at DESC LIMIT 5;
+  e) Check that the winner received a badge:
+       SELECT * FROM user_badges WHERE badge_type = 'window_winner'
+       ORDER BY awarded_at DESC LIMIT 5;
+
+
+────────────────────────────────────────────────────────────────────────────────
+TASK 11 — WIRE SENTRY DSN FOR THE MOBILE APP (OPTIONAL)
+Priority: LOW — the app works without this; errors just won't be captured remotely
+────────────────────────────────────────────────────────────────────────────────
+
+The API server already has Sentry wired (it reads SENTRY_DSN from the env and
+initializes Sentry conditionally). The mobile app's Sentry integration needs to
+be confirmed and the DSN added.
+
+STEP 1 — Create a Sentry project for React Native
+  Go to https://sentry.io (create an account if you do not have one).
+  Click "Projects" → "Create Project".
+  Select "React Native" as the platform.
+  Give it a name like "rivals-mobile".
+  Click "Create Project".
+
+STEP 2 — Copy the DSN
+  After creating the project, Sentry shows you the DSN immediately.
+  It looks like: https://abc123def456@o123456.ingest.sentry.io/7890123
+  Copy it.
+
+STEP 3 — Add the DSN to your environment
+  Open apps/mobile/.env (or the root .env that the mobile app reads).
+  Add: EXPO_PUBLIC_SENTRY_DSN=https://abc123def456@o123456.ingest.sentry.io/7890123
+  Also add this to GitHub Secrets (as described in Task 6, step 8).
+
+STEP 4 — Verify Sentry is initialized in the mobile app
+  Check apps/mobile/src/App.tsx or the root entry file to see if Sentry.init()
+  is called. If it is not, add:
+    import * as Sentry from '@sentry/react-native';
+    Sentry.init({
+      dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+      environment: __DEV__ ? 'development' : 'production',
+      tracesSampleRate: 0.1,
+    });
+  This should go at the very top of the entry file, before anything else.
+
+STEP 5 — Test that errors are captured
+  Temporarily add a throw statement in a non-critical part of the app (like a
+  useEffect), run the app, trigger it, then check Sentry's "Issues" tab to
+  confirm the error was captured. Remove the throw statement after testing.
+
+
+────────────────────────────────────────────────────────────────────────────────
+TASK 12 — CONFIRM GOOGLE OAUTH REDIRECT URL IN SUPABASE (OPTIONAL)
+Priority: LOW — only needed if users are signing in with Google
+────────────────────────────────────────────────────────────────────────────────
+
+Task 01.5 requires Google OAuth login as an option. For this to work in the
+mobile app, the `rivals://auth/callback` deep link must be registered as an
+allowed redirect URL in Supabase's Auth settings.
+
+STEP 1 — Go to Supabase Auth settings
+  Supabase Dashboard → Authentication → URL Configuration.
+
+STEP 2 — Add the redirect URL
+  Under "Redirect URLs", click "Add URL".
+  Add: rivals://auth/callback
+  Click "Save".
+  Also add the web equivalent if you have a domain:
+    https://yourdomain.com/auth/callback
+
+STEP 3 — Configure Google OAuth credentials
+  Still in Authentication, click "Providers" in the sidebar.
+  Click "Google".
+  Toggle it ON.
+  You will need a Google OAuth Client ID and Client Secret.
+  To get them:
+    a) Go to https://console.cloud.google.com
+    b) Create or select a project
+    c) Navigate to "APIs & Services" → "Credentials"
+    d) Click "Create Credentials" → "OAuth 2.0 Client IDs"
+    e) Application type: "Web application" (Supabase uses this even for mobile)
+    f) Under "Authorized redirect URIs", add your Supabase callback URL:
+         https://<your-project-id>.supabase.co/auth/v1/callback
+    g) Copy the Client ID and Client Secret
+  Paste them into the Supabase Google provider settings.
+  Click "Save".
+
+STEP 4 — Test the Google login flow
+  On the mobile app, tap "Continue with Google" on the LoginScreen.
+  A browser window should open showing Google's login page.
+  After logging in, it should redirect back to the app via the rivals:// deep link.
+  The app should detect the session and navigate to the Dashboard.
+  If the redirect does not work, double-check that rivals://auth/callback is in
+  both Supabase's redirect URL list and the app.config.ts scheme configuration.
+
+
+================================================================================
+END OF MANUAL TASKS DOCUMENT
+================================================================================
+
+QUICK REFERENCE — PRIORITY ORDER:
+
+  🔴 CRITICAL (do these first, in order):
+     1. Create Cloudflare R2 bucket + fill .env credentials
+     2. Create Supabase avatars storage bucket with RLS policies
+     3. Fill in DATABASE_URL with real Supabase password
+     4. Enable pg_cron and run challenge-transitions.sql
+     5. Run backfill script after deploying task 04 code
+
+  🟠 HIGH (do before pushing to GitHub):
+     6. Add 7 GitHub Actions secrets to the repo
+
+  🟡 MEDIUM (do before calling tasks 01–04 "done"):
+     7. Write code to add image picker to CreateGroupScreen
+     8. Manual test: leaderboard mode switcher persists
+     9. Manual E2E smoke test: log a habit → see leaderboard update
+    10. Manual test: challenge window transitions with cron
+
+  🟢 LOW (optional polish):
+    11. Wire Sentry DSN for mobile app
+    12. Confirm Google OAuth redirect URL in Supabase
+
+================================================================================

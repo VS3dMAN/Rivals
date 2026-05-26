@@ -12,3 +12,4 @@ export * from './feedEvents';
 export * from './notifications';
 export * from './pushTokens';
 export * from './badges';
+export * from './dataExports';

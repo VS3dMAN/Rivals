@@ -1,0 +1,77 @@
+# Sentry alert rules for Rivals — apply via Sentry dashboard or sentry-cli.
+# Each `rule` is an Issue Alert (event-based) unless noted as Metric.
+
+project:
+  organization: rivals
+  api: rivals-api
+  mobile: rivals-mobile
+
+rules:
+  - name: API — error rate spike
+    project: rivals-api
+    type: metric
+    metric: failure_rate
+    threshold: 0.02       # 2% of transactions
+    window: 5m
+    actions:
+      - notify: "#rivals-oncall"
+      - pagerduty: rivals-primary
+
+  - name: API — unhandled exception (any new issue)
+    project: rivals-api
+    type: issue
+    conditions:
+      - first_seen: true
+    actions:
+      - notify: "#rivals-oncall"
+
+  - name: API — proof-upload failure burst
+    project: rivals-api
+    type: issue
+    conditions:
+      - tag.endpoint: "/logs/upload-url"
+      - count_in_window:
+          window: 10m
+          threshold: 25
+    actions:
+      - notify: "#rivals-oncall"
+      - pagerduty: rivals-primary
+
+  - name: API — R2 PUT failures
+    project: rivals-api
+    type: issue
+    conditions:
+      - message_contains: "r2 put"
+      - level: error
+      - count_in_window:
+          window: 10m
+          threshold: 10
+    actions:
+      - notify: "#rivals-oncall"
+
+  - name: Mobile — crash-free sessions below SLO
+    project: rivals-mobile
+    type: metric
+    metric: crash_free_sessions
+    threshold: 0.995
+    window: 1h
+    actions:
+      - notify: "#rivals-oncall"
+
+  - name: Mobile — new release regression
+    project: rivals-mobile
+    type: issue
+    conditions:
+      - first_seen_in_release: latest
+    actions:
+      - notify: "#rivals-mobile"
+
+  - name: Cron — challenge transition job failure
+    project: rivals-api
+    type: issue
+    conditions:
+      - tag.job_name: "challenge-activate,challenge-complete,challenge-ending-soon"
+      - level: error
+    actions:
+      - notify: "#rivals-oncall"
+      - pagerduty: rivals-primary

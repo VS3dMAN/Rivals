@@ -27,6 +27,7 @@ export const notificationKind = pgEnum('notification_kind', [
   'milestone',
   'challenge_start',
   'challenge_end',
+  'challenge_window_ending_soon',
   'member_join',
   'admin_transfer',
 ]);

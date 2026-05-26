@@ -34,6 +34,8 @@ export function ProofPhotoThumbnail({
         style={[styles.thumb, { width: size, height: size }]}
         disabled={!signedUrl}
         onPress={() => setOpen(true)}
+        accessibilityRole="imagebutton"
+        accessibilityLabel={label ? `${label} — tap to expand` : 'Proof photo — tap to expand'}
       >
         {isLoading || !signedUrl ? (
           <View style={styles.center}>
@@ -46,7 +48,12 @@ export function ProofPhotoThumbnail({
       </Pressable>
 
       <Modal visible={open} animationType="fade" transparent onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => setOpen(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Close photo"
+        >
           {signedUrl ? (
             <Image source={{ uri: signedUrl }} style={styles.fullImage} resizeMode="contain" />
           ) : null}

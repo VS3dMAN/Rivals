@@ -77,26 +77,26 @@ function tableNameOf(t: unknown): string {
 
 function makeQuery(state: FakeState, _cols?: Record<string, unknown>) {
   let table = '';
-  return {
+  const self: Record<string, unknown> = {
     from(t: unknown) {
       table = tableNameOf(t);
-      return this as unknown as {
-        where: (..._w: unknown[]) => { limit: (n?: number) => Promise<unknown[]> };
-      } & typeof obj;
+      return self;
     },
-    where(..._w: unknown[]) {
-      return this as unknown as {
-        limit: (n?: number) => Promise<unknown[]>;
-      } & typeof obj;
-    },
+    innerJoin(..._args: unknown[]) { return self; },
+    leftJoin(..._args: unknown[]) { return self; },
+    where(..._w: unknown[]) { return self; },
+    groupBy(..._g: unknown[]) { return self; },
     async limit(_n?: number): Promise<unknown[]> {
       return rowsForTable(state, table);
     },
     async orderBy(..._o: unknown[]): Promise<unknown[]> {
       return rowsForTable(state, table);
     },
-  } as const;
-  function obj() {}
+    async then(resolve: (v: unknown[]) => void) {
+      resolve(rowsForTable(state, table));
+    },
+  };
+  return self;
 }
 
 function rowsForTable(state: FakeState, name: string): unknown[] {
@@ -159,14 +159,17 @@ function makeInsert(state: FakeState, table: { _: { name: string } }) {
           }
           break;
       }
-      return {
+      const chain = {
         async returning() {
           if (name === 'habit_logs') {
             return [state.habitLogs[state.habitLogs.length - 1]];
           }
           return rows;
         },
+        onConflictDoUpdate() { return chain; },
+        onConflictDoNothing() { return chain; },
       };
+      return chain;
     },
   };
 }

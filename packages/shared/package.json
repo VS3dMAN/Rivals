@@ -12,6 +12,9 @@
     "./zod/groups": "./src/zod/groups.ts",
     "./zod/habits": "./src/zod/habits.ts",
     "./zod/logs": "./src/zod/logs.ts",
+    "./zod/feed": "./src/zod/feed.ts",
+    "./zod/push": "./src/zod/push.ts",
+    "./zod/notifications": "./src/zod/notifications.ts",
     "./session": "./src/session.ts",
     "./hooks/useCurrentUser": "./src/hooks/useCurrentUser.ts"
   },

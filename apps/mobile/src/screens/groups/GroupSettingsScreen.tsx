@@ -26,7 +26,9 @@ import {
   type GroupMember,
 } from '../../hooks/useGroups';
 import { useSessionStore } from '../../stores/session';
+import { useUpdateGroupMode } from '../../hooks/useLeaderboard';
 import type { GroupsStackParamList } from '../../navigation/GroupsStack';
+import { Tooltip } from '../../components/Tooltip';
 
 type Nav = NativeStackNavigationProp<GroupsStackParamList, 'GroupSettings'>;
 type Route = RouteProp<GroupsStackParamList, 'GroupSettings'>;
@@ -163,6 +165,83 @@ function InviteModal({
   );
 }
 
+const MODES = ['streak', 'total', 'window'] as const;
+const MODE_LABELS: Record<string, string> = {
+  streak: '🔥 Streak',
+  total: '📊 Total',
+  window: '🏆 Window',
+};
+
+function ModeSwitcher({
+  groupId,
+  currentMode,
+}: {
+  groupId: string;
+  currentMode: string;
+}) {
+  const updateMode = useUpdateGroupMode(groupId);
+
+  return (
+    <View style={modeStyles.container}>
+      <Text style={modeStyles.label}>Leaderboard Mode</Text>
+      <View style={modeStyles.row}>
+        {MODES.map((m) => (
+          <Pressable
+            key={m}
+            style={[
+              modeStyles.pill,
+              currentMode === m && modeStyles.pillActive,
+            ]}
+            onPress={() => {
+              if (m !== currentMode) {
+                updateMode.mutate(m);
+              }
+            }}
+            disabled={updateMode.isPending}
+          >
+            <Text
+              style={[
+                modeStyles.pillText,
+                currentMode === m && modeStyles.pillTextActive,
+              ]}
+            >
+              {MODE_LABELS[m]}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const modeStyles = StyleSheet.create({
+  container: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  label: { ...theme.typography.caption, color: theme.colors.textMuted },
+  row: { flexDirection: 'row', gap: theme.spacing.sm },
+  pill: {
+    flex: 1,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.background,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+  },
+  pillActive: {
+    backgroundColor: theme.colors.accent,
+    borderColor: theme.colors.accent,
+  },
+  pillText: { ...theme.typography.caption, color: theme.colors.textMuted },
+  pillTextActive: { color: '#0B1220', fontWeight: '700' },
+});
+
 export function GroupSettingsScreen() {
   const nav = useNavigation<Nav>();
   const route = useRoute<Route>();
@@ -220,6 +299,11 @@ export function GroupSettingsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <Tooltip
+        id="group-settings-invite"
+        title="Invite friends"
+        body="Share the invite link or code from this card to add friends. Admins can regenerate the code if it leaks."
+      />
       <FlatList
         contentContainerStyle={styles.list}
         data={group.members}
@@ -276,6 +360,17 @@ export function GroupSettingsScreen() {
             <Text style={styles.sectionTitle}>
               Members ({group.members.length})
             </Text>
+
+            {isAdmin && (
+              <ModeSwitcher groupId={groupId} currentMode={group.leaderboardMode} />
+            )}
+
+            <Pressable
+              style={[styles.btn, styles.btnSecondary, { flex: 0 }]}
+              onPress={() => nav.navigate('PastChallenges', { groupId })}
+            >
+              <Text style={styles.btnSecondaryText}>🏆 View Challenges</Text>
+            </Pressable>
           </View>
         }
         ListFooterComponent={

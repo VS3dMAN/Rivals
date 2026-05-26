@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
 import * as Sentry from '@sentry/node';
@@ -13,6 +14,12 @@ import authRoutes from './modules/auth/routes';
 import groupsRoutes from './modules/groups/routes';
 import habitsRoutes from './modules/habits/routes';
 import logsRoutes from './modules/logs/routes';
+import leaderboardRoutes from './modules/leaderboard/routes';
+import feedRoutes from './modules/feed/routes';
+import pushRoutes from './modules/push/routes';
+import notificationRoutes from './modules/notifications/routes';
+import badgeRoutes from './modules/badges/routes';
+import statsRoutes from './modules/stats/routes';
 import { r2 } from './lib/r2';
 import { getDb, type Db } from './db/client';
 
@@ -46,11 +53,28 @@ export async function buildServer(opts: BuildOptions = {}): Promise<FastifyInsta
   });
 
   await app.register(sensible);
+  await app.register(helmet, {
+    contentSecurityPolicy: false,
+    hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  });
   await app.register(cors, { origin: true, credentials: true });
   await app.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
   });
+
+  const forceHttps = env.FORCE_HTTPS ?? env.NODE_ENV === 'production';
+  if (forceHttps) {
+    app.addHook('onRequest', async (req, reply) => {
+      const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? req.protocol;
+      if (proto && proto !== 'https') {
+        const host = req.headers.host ?? '';
+        return reply.code(301).redirect(`https://${host}${req.url}`);
+      }
+    });
+  }
 
   const supabase =
     opts.supabase ??
@@ -71,6 +95,12 @@ export async function buildServer(opts: BuildOptions = {}): Promise<FastifyInsta
   await app.register(groupsRoutes, { db });
   await app.register(habitsRoutes, { db });
   await app.register(logsRoutes, { db, r2 });
+  await app.register(leaderboardRoutes, { db });
+  await app.register(feedRoutes, { db, r2 });
+  await app.register(pushRoutes, { db });
+  await app.register(notificationRoutes, { db });
+  await app.register(badgeRoutes, { db });
+  await app.register(statsRoutes, { db });
 
   return app;
 }

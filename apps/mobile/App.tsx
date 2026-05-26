@@ -8,14 +8,20 @@ import { View, ActivityIndicator } from 'react-native';
 import Constants from 'expo-constants';
 
 import { queryClient, createPersister } from './src/lib/queryClient';
+import { initAnalytics, trackScreen } from './src/lib/analytics';
 import { loadSession } from './src/lib/session';
 import { subscribeLogQueueToNetwork } from './src/lib/logQueue';
 import { useSessionStore } from './src/stores/session';
 import { TabsNavigator } from './src/navigation/TabsNavigator';
 import { AuthGate } from './src/screens/auth/AuthGate';
+import { OnboardingCarousel } from './src/screens/onboarding/OnboardingCarousel';
+import { useOnboardingStore } from './src/stores/onboarding';
 import { linking } from './src/navigation/linking';
 import { theme } from './src/theme';
 import { ResponsiveContainer } from '@rivals/ui';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
+
+initAnalytics();
 
 // Sentry init — safe no-op when DSN absent
 const sentryDsn = Constants.expoConfig?.extra?.sentryDsn as string | undefined;
@@ -75,12 +81,36 @@ function SessionHydrator({ children }: { children: React.ReactNode }) {
 
 function Root() {
   const accessToken = useSessionStore((s) => s.accessToken);
+  const hasSeenOnboarding = useOnboardingStore((s) => s.hasSeenOnboarding);
+  const markOnboardingComplete = useOnboardingStore((s) => s.markOnboardingComplete);
+
+  useEffect(() => {
+    useOnboardingStore.getState().hydrate();
+  }, []);
+
   useEffect(() => {
     return subscribeLogQueueToNetwork(queryClient);
   }, []);
+
+  if (!accessToken) {
+    return (
+      <ResponsiveContainer>
+        <AuthGate />
+      </ResponsiveContainer>
+    );
+  }
+
+  if (!hasSeenOnboarding) {
+    return (
+      <ResponsiveContainer>
+        <OnboardingCarousel onComplete={markOnboardingComplete} />
+      </ResponsiveContainer>
+    );
+  }
+
   return (
     <ResponsiveContainer>
-      {accessToken ? <TabsNavigator /> : <AuthGate />}
+      <TabsNavigator />
     </ResponsiveContainer>
   );
 }
@@ -93,12 +123,21 @@ export default function App() {
           client={queryClient}
           persistOptions={{ persister: createPersister() }}
         >
-          <NavigationContainer theme={navTheme} linking={linking}>
-            <StatusBar style="light" />
-            <SessionHydrator>
-              <Root />
-            </SessionHydrator>
-          </NavigationContainer>
+          <ErrorBoundary>
+            <NavigationContainer
+              theme={navTheme}
+              linking={linking}
+              onStateChange={(state) => {
+                const route = state?.routes?.[state.index ?? 0];
+                if (route?.name) trackScreen(route.name);
+              }}
+            >
+              <StatusBar style="light" />
+              <SessionHydrator>
+                <Root />
+              </SessionHydrator>
+            </NavigationContainer>
+          </ErrorBoundary>
         </PersistQueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

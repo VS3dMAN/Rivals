@@ -1,0 +1,222 @@
+================================================================================
+RIVALS — REMAINING IMPLEMENTATION CHECKLIST (CODE ONLY)
+================================================================================
+Source: audit of Vibe Code tasks 01-07 against current codebase
+Scope:  code/file work only — manual dashboard provisioning is tracked separately
+        in plans/manual-tasks-01-to-04.txt
+Generated: 2026-05-19
+================================================================================
+
+
+HIGH-LEVEL STATUS
+-----------------
+Task 01  Foundation .................................. CODE-COMPLETE
+Task 02  Groups & Habits ............................. 1 GAP (avatar picker)
+Task 03  Proof Photo Core Loop ....................... CODE-COMPLETE
+Task 04  Leaderboard Engine .......................... CODE-COMPLETE
+Task 05  Feed / Notifications / Gamification ......... MOSTLY DONE
+Task 06  Web Parity & Polish ......................... MAJOR GAPS
+Task 07  Security & Launch ........................... LARGELY MISSING
+
+
+================================================================================
+TASK 02 — GROUPS & HABITS
+================================================================================
+
+[ ] 02.6  Image picker for CreateGroupScreen avatar
+        File: apps/mobile/src/screens/groups/CreateGroupScreen.tsx
+        - Add expo-image-picker dep
+        - iOS  NSPhotoLibraryUsageDescription in app.config.ts
+        - Android  READ_MEDIA_IMAGES in app.config.ts
+        - Replace text URL input with tappable avatar that uploads to
+          Supabase Storage "avatars" bucket and sets avatarUrl from public URL
+        - (Exact code laid out in plans/manual-tasks-01-to-04.txt Task 7)
+
+
+================================================================================
+TASK 05 — FEED / NOTIFICATIONS / GAMIFICATION
+================================================================================
+
+[ ] 05.5  Add challenge_window_ending_soon notification (24h before end)
+        - New pg_cron job alongside
+          packages/api/src/jobs/challenge-transitions.sql
+        - Wire dispatcher entry in
+          packages/api/src/modules/push/dispatcher.ts
+        - Respect per-user notification prefs
+
+[ ] 05.4 / 06.3  Web push (FCM Web SDK) wiring
+        - apps/mobile/src/lib/pushSetup.web.ts:
+            replace TODO placeholders with real Firebase init from env
+            (VAPID public key, Firebase config)
+        - apps/mobile/public/firebase-messaging-sw.js:
+            populate Firebase config from build-time env
+        - packages/api/src/modules/push/dispatcher.ts:
+            add FCM HTTP v1 send path for platform='web' tokens
+            (currently logs warning only)
+
+[ ] 05.5  Verify per-group / per-type pref filtering in dispatcher with tests
+        - Add unit tests covering muted-group and muted-type cases
+
+
+================================================================================
+TASK 06 — WEB PARITY & POLISH
+================================================================================
+
+[ ] 06.1  Web audit checklist doc + screen-by-screen audit
+        - Create Vibe Code/web-audit.md listing each mobile screen
+          with web pass/fail at 375 / 768 / 1280 px
+        - Remove or platform-guard any RN-only imports surfaced by the audit
+
+[ ] 06.2  Responsive multi-column layouts on key screens
+        Use existing useBreakpoint() (packages/ui/src/useBreakpoint.ts)
+        and ResponsiveContainer to apply 2/3-column layouts at md/lg to:
+        - GroupDashboardScreen
+        - FeedScreen
+        - LeaderboardScreen
+        - GroupsListScreen
+        - BadgesScreen
+
+[ ] 06.5  Global RN-level ErrorBoundary in App.tsx
+        - Wrap navigator
+        - Forward caught errors to Sentry
+
+[ ] 06.6  Contextual tooltips (beyond onboarding carousel)
+        First-visit tooltips on:
+        - Dashboard "Complete" button
+        - Leaderboard mode pill
+        - Group Settings invite section
+        Dismissal flags stored in useOnboardingStore
+
+[ ] 06.7  Cross-platform polish pass
+        - Wire expo-haptics to: shutter tap, log success, badge award,
+          reaction tap
+        - Add accessibilityLabel / accessibilityRole to all interactive
+          components in packages/ui plus the screens listed in 06.2
+        - Web: visible focus-ring CSS in apps/mobile/public/ style overrides;
+          verify keyboard tab order
+        - Extract remaining theme tokens into packages/ui/src/theme/
+
+
+================================================================================
+TASK 07 — SECURITY, HARDENING & PRE-DEPLOYMENT
+================================================================================
+
+[ ] 07.1  TLS / security headers + checklist doc
+        - In packages/api/src/server.ts:
+            add @fastify/helmet
+            HSTS
+            redirect on x-forwarded-proto !== 'https' in non-dev
+        - Create Vibe Code/security-checklist.md and tick off items
+
+[ ] 07.2  RLS audit script + expanded integration tests
+        - New: packages/api/src/scripts/audit-rls.ts
+            connects as anon and as a second user
+            asserts deny on every table
+        - Expand packages/api/src/db/tests/policies.test.ts negative cases for:
+            habit_logs, feed_events, feed_reactions, leaderboard_scores,
+            notifications, push_tokens, user_badges
+
+[ ] 07.3  Per-route rate limits + load test script
+        - In server.ts / route registration, tighter limits on:
+            POST /auth/signup
+            POST /auth/login
+            POST /logs/upload-url
+            POST /logs
+            POST /groups/:id/invite
+        - Add packages/api/loadtest/proof-upload.k6.js
+            500-user concurrent proof-upload scenario
+
+[ ] 07.4  Photo upload + username hardening
+        - /logs/upload-url: validate content-length <= N MB and
+          content-type in { jpeg, png, webp }
+        - Username regex already enforced; add mixed-script / homoglyph
+          rejection in packages/shared/src/zod/auth.ts
+
+[ ] 07.5  GDPR / CCPA data export + account deletion (CRITICAL)
+        - Migration: new tables data_export_jobs, purge_queue
+        - API: POST /me/export
+              enqueues job, returns job id
+        - API: GET  /me/export/:id
+              status + signed URL
+        - API: DELETE /me
+              cascades soft-delete
+              enqueues purge of R2 photos
+              anonymises logs
+              revokes refresh tokens
+        - Background worker (pg_cron or scheduled script) that fulfils
+          export jobs and processes purge queue
+        - UI: apps/mobile/src/screens/PrivacyScreen.tsx
+              linked from Profile with "Export data" and "Delete account"
+        - Signup consent checkbox + link to Privacy Policy / TOS in
+          SignUpScreen.tsx
+
+[ ] 07.6  Analytics SDK + KPI events
+        - Pick one (PostHog default per Open Question §6)
+        - Install in mobile + web; init in App.tsx
+        - Backend: emit server-side events for
+            log_submitted, signup_completed, group_created,
+            badge_awarded, window_completed
+        - Mobile: track
+            screen_view, complete_pressed, proof_captured,
+            proof_uploaded, reaction_added, notification_opened
+
+[ ] 07.7  Performance audit artefacts
+        - Verify every index from 00-architecture-and-timeline.md §2.4
+          exists in migrations; add a migration for any missing
+        - packages/api/src/scripts/explain-leaderboard.ts:
+            EXPLAIN ANALYZE for leaderboard + feed top queries
+        - Vibe Code/perf-report.md summarising results
+
+[ ] 07.8  E2E persona test script doc
+        - Create Vibe Code/e2e-personas.md with step-by-step manual scripts
+          for Aryan, Shreya, Rohan on iOS, Android, Chrome
+
+[ ] 07.9  Store assets + legal pages + custom web domain hooks
+        - store-assets/ directory with iOS + Play screenshots, listing copy,
+          camera-permission justification text
+        - Web routes /privacy and /terms in the web shell rendering markdown
+          from Vibe Code/privacy.md and Vibe Code/terms.md (create both)
+        - Confirm eas.json channels for production and preview
+
+[ ] 07.10 Production runbook + smoke test
+        - Vibe Code/runbook.md: deploy steps, rollback, on-call escalation
+        - packages/api/src/scripts/smoke-prod.ts:
+            hits /health, /me (seeded creds), creates+deletes a throwaway group
+        - Sentry alert rules config (as code in infra/sentry/) for error-rate
+          and proof-upload-failure thresholds
+
+
+================================================================================
+CRITICAL FILES — ONE PLACE TO START
+================================================================================
+
+packages/api/src/server.ts ............... security headers, per-route rate limits
+packages/api/src/modules/users/routes.ts . add /me/export, DELETE /me
+packages/api/src/jobs/ ................... new cron: challenge_window_ending_soon
+packages/api/src/modules/push/dispatcher.ts ... FCM Web HTTP v1 send path
+apps/mobile/App.tsx ...................... global ErrorBoundary, analytics init
+apps/mobile/src/lib/pushSetup.web.ts ..... Firebase Web push
+apps/mobile/public/firebase-messaging-sw.js .. Firebase Web push SW
+apps/mobile/src/screens/groups/CreateGroupScreen.tsx .. avatar image picker
+apps/mobile/src/screens/PrivacyScreen.tsx ... NEW
+packages/shared/src/zod/auth.ts .......... username hardening
+
+
+================================================================================
+VERIFICATION (after implementation, in order)
+================================================================================
+
+ 1. pnpm -w typecheck && pnpm -w lint && pnpm -w test — all green
+ 2. RLS audit:
+      pnpm --filter @rivals/api exec ts-node src/scripts/audit-rls.ts
+      — zero leaks
+ 3. Run app on iOS + Android + Chrome; complete each persona script in
+    Vibe Code/e2e-personas.md
+ 4. Trigger /me/export, download the result, confirm contents
+ 5. Delete a test account; confirm R2 photos purged and logs anonymised
+ 6. Send a web push to a Chrome client end-to-end
+ 7. Load test proof-upload.k6.js — P95 < 90s, error rate < 2%
+
+================================================================================
+END
+================================================================================

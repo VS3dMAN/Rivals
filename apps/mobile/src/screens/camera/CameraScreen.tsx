@@ -10,11 +10,13 @@ import {
   Alert,
 } from 'react-native';
 import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
+import * as Haptics from 'expo-haptics';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../../theme';
 import { useSessionStore } from '../../stores/session';
 import { useLogCompletion } from '../../hooks/useLogCompletion';
+import { track } from '../../lib/analytics';
 import {
   resizePhoto,
   captureWatermarked,
@@ -100,6 +102,7 @@ export function CameraScreen() {
     const cam = cameraRef.current;
     if (!cam) return;
     setError(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => void 0);
     try {
       const raw = await cam.takePictureAsync({
         quality: 0.85,
@@ -109,6 +112,7 @@ export function CameraScreen() {
       const resizedOut = await resizePhoto(raw.uri);
       setResized({ ...resizedOut, capturedAt: new Date() });
       setPhase('captured');
+      track('proof_captured', { groupId, habitId });
     } catch (e) {
       setError((e as Error).message);
     }
@@ -168,7 +172,12 @@ export function CameraScreen() {
             </Pressable>
           </View>
           <View style={styles.bottomBar}>
-            <Pressable style={styles.shutter} onPress={takePhoto}>
+            <Pressable
+              style={styles.shutter}
+              onPress={takePhoto}
+              accessibilityRole="button"
+              accessibilityLabel="Take proof photo"
+            >
               <View style={styles.shutterInner} />
             </Pressable>
             <Text style={styles.hint}>{habitName}</Text>

@@ -6,10 +6,16 @@ import { schema, type Db } from '../../db/client';
 import {
   uploadUrlRequestSchema,
   confirmLogSchema,
+  ALLOWED_PHOTO_CONTENT_TYPES,
+  MAX_PHOTO_BYTES,
 } from '@rivals/shared/zod/logs';
 import { HttpError, requireMember } from '../groups/service';
 import { todayInTz } from '../../lib/tz';
 import type { R2Module } from '../../lib/r2';
+import { recomputeScores } from '../leaderboard/service';
+import { notifyGroupMembers } from '../notifications/service';
+import { evaluateBadges } from '../badges/service';
+import { track } from '../../lib/analytics';
 
 interface LogsRouteOptions {
   db: Db;
@@ -25,9 +31,17 @@ const routes: FastifyPluginAsync<LogsRouteOptions> = async (app, opts) => {
   const { db, r2 } = opts;
 
   // POST /logs/upload-url — issue a presigned PUT URL for the user's next proof.
-  app.post('/logs/upload-url', async (req, reply) => {
+  app.post('/logs/upload-url', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (req, reply) => {
     const auth = await app.requireAuth(req);
-    const { groupId, habitId } = uploadUrlRequestSchema.parse(req.body);
+    const { groupId, habitId, contentType, contentLength } = uploadUrlRequestSchema.parse(req.body);
+    if (contentLength !== undefined && contentLength > MAX_PHOTO_BYTES) {
+      throw new HttpError(413, 'PHOTO_TOO_LARGE', `Photo must be <= ${MAX_PHOTO_BYTES} bytes`);
+    }
+    if (!ALLOWED_PHOTO_CONTENT_TYPES.includes(contentType)) {
+      throw new HttpError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Only jpeg/png/webp allowed');
+    }
 
     await requireMember(db, groupId, auth.id);
 
@@ -58,7 +72,7 @@ const routes: FastifyPluginAsync<LogsRouteOptions> = async (app, opts) => {
       expiresAt,
     });
 
-    const presigned = await r2.issuePresignedPut(objectKey, 'image/jpeg', 3600);
+    const presigned = await r2.issuePresignedPut(objectKey, contentType, 3600);
 
     return reply.status(201).send({
       logId,
@@ -70,7 +84,9 @@ const routes: FastifyPluginAsync<LogsRouteOptions> = async (app, opts) => {
   });
 
   // POST /logs — confirm an upload, validate timestamps, write the habit_log row.
-  app.post('/logs', async (req) => {
+  app.post('/logs', {
+    config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+  }, async (req) => {
     const auth = await app.requireAuth(req);
     const { logId, clientTimestamp } = confirmLogSchema.parse(req.body);
 
@@ -97,6 +113,9 @@ const routes: FastifyPluginAsync<LogsRouteOptions> = async (app, opts) => {
     const head = await r2.headObject(pending.objectKey);
     if (!head) {
       throw new HttpError(422, 'UPLOAD_NOT_FOUND', 'Photo upload not found in storage');
+    }
+    if (head.contentLength > MAX_PHOTO_BYTES) {
+      throw new HttpError(413, 'PHOTO_TOO_LARGE', `Photo must be <= ${MAX_PHOTO_BYTES} bytes`);
     }
 
     // Resolve user-tz so the log_date matches the user's local calendar day.
@@ -155,6 +174,56 @@ const routes: FastifyPluginAsync<LogsRouteOptions> = async (app, opts) => {
       });
 
       await tx.delete(schema.pendingLogs).where(eq(schema.pendingLogs.id, logId));
+
+      // Recompute leaderboard scores for all three modes
+      await recomputeScores(tx as unknown as Db, {
+        userId: auth.id,
+        groupId: pending.groupId,
+        affectedHabitId: pending.habitId,
+      });
+
+      // Evaluate badges (fire-and-forget, uses db not tx)
+      const clientDate = new Date(clientTimestamp);
+      const localHour = clientDate.getHours();
+      // Read fresh streak for badge evaluation
+      db.select({ currentStreak: schema.streaks.currentStreak })
+        .from(schema.streaks)
+        .where(
+          and(
+            eq(schema.streaks.userId, auth.id),
+            eq(schema.streaks.groupId, pending.groupId),
+            isNull(schema.streaks.habitId),
+          ),
+        )
+        .limit(1)
+        .then(([s]) => {
+          evaluateBadges(db, {
+            userId: auth.id,
+            groupId: pending.groupId,
+            currentStreak: s?.currentStreak ?? 0,
+            localHour,
+          });
+        })
+        .catch(() => {});
+
+      track('log_submitted', auth.id, {
+        groupId: pending.groupId,
+        habitId: pending.habitId,
+      }).catch(() => void 0);
+
+      // Notify group members (fire-and-forget, outside transaction)
+      notifyGroupMembers(db, {
+        groupId: pending.groupId,
+        excludeUserId: auth.id,
+        kind: 'group_activity',
+        payload: {
+          title: 'New proof submitted',
+          body: `Someone completed ${habitRow?.name ?? 'a habit'}`,
+          groupId: pending.groupId,
+          logId,
+          habitName: habitRow?.name ?? '',
+        },
+      }).catch(() => {});
 
       return {
         logId,

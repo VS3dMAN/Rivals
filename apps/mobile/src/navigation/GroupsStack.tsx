@@ -6,6 +6,11 @@ import { GroupSettingsScreen } from '../screens/groups/GroupSettingsScreen';
 import { CreateGroupScreen } from '../screens/groups/CreateGroupScreen';
 import { JoinGroupScreen } from '../screens/groups/JoinGroupScreen';
 import { CameraScreen } from '../screens/camera/CameraScreen';
+import { LeaderboardScreen } from '../screens/groups/LeaderboardScreen';
+import { PastChallengesScreen } from '../screens/groups/PastChallengesScreen';
+import { FeedScreen } from '../screens/groups/FeedScreen';
+import { PersonalStatsScreen } from '../screens/PersonalStatsScreen';
+import { JoinLandingScreen } from '../screens/groups/JoinLandingScreen';
 
 export type GroupsStackParamList = {
   GroupsList: undefined;
@@ -14,6 +19,11 @@ export type GroupsStackParamList = {
   CreateGroup: undefined;
   JoinGroup: { code?: string };
   CaptureProof: { groupId: string; habitId: string; habitName: string };
+  Leaderboard: { groupId: string };
+  PastChallenges: { groupId: string };
+  Feed: { groupId: string };
+  Stats: { groupId: string };
+  JoinLanding: { code: string };
 };
 
 const Stack = createNativeStackNavigator<GroupsStackParamList>();
@@ -61,6 +71,32 @@ export function GroupsStack() {
           animation: 'slide_from_bottom',
         }}
       />
+      <Stack.Screen
+        name="Leaderboard"
+        component={LeaderboardScreen}
+        options={{ title: 'Leaderboard' }}
+      />
+      <Stack.Screen
+        name="PastChallenges"
+        component={PastChallengesScreen}
+        options={{ title: 'Challenges' }}
+      />
+      <Stack.Screen
+        name="Feed"
+        component={FeedScreen}
+        options={{ title: 'Feed' }}
+      />
+      <Stack.Screen
+        name="Stats"
+        component={PersonalStatsScreen}
+        options={{ title: 'My Stats' }}
+      />
+      <Stack.Screen
+        name="JoinLanding"
+        component={JoinLandingScreen}
+        options={{ title: 'Join Group' }}
+      />
     </Stack.Navigator>
   );
 }
+

@@ -15,11 +15,13 @@ const config: ExpoConfig = {
     infoPlist: {
       NSCameraUsageDescription:
         'Rivals needs your camera to capture live proof photos for habit completions. Gallery uploads are not allowed.',
+      NSPhotoLibraryUsageDescription:
+        'Rivals only uses your photo library to pick a group avatar image.',
     },
   },
   android: {
     package: 'com.rivals.app',
-    permissions: ['CAMERA'],
+    permissions: ['CAMERA', 'READ_MEDIA_IMAGES'],
   },
   web: {
     bundler: 'metro',
@@ -36,6 +38,20 @@ const config: ExpoConfig = {
           'Rivals needs your camera to capture live proof photos. Gallery access is never requested.',
       },
     ],
+    [
+      'expo-image-picker',
+      {
+        photosPermission:
+          'Rivals needs photo library access to pick a group avatar image.',
+      },
+    ],
+    [
+      'expo-notifications',
+      {
+        icon: './assets/notification-icon.png',
+        color: '#F59E0B',
+      },
+    ],
   ],
   experiments: {
     typedRoutes: true,
@@ -45,6 +61,15 @@ const config: ExpoConfig = {
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
     sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+    firebaseApiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+    firebaseAuthDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    firebaseProjectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+    firebaseStorageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    firebaseMessagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    firebaseAppId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+    firebaseVapidKey: process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY,
+    posthogApiKey: process.env.EXPO_PUBLIC_POSTHOG_API_KEY,
+    posthogHost: process.env.EXPO_PUBLIC_POSTHOG_HOST,
   },
 };
 

@@ -20,6 +20,7 @@ import {
   requireMember,
   updateGroup,
 } from './service';
+import { track } from '../../lib/analytics';
 
 interface GroupsRouteOptions {
   db: Db;
@@ -39,6 +40,7 @@ const routes: FastifyPluginAsync<GroupsRouteOptions> = async (app, opts) => {
     const auth = await app.requireAuth(req);
     const body = createGroupSchema.parse(req.body);
     const group = await createGroup(db, auth.id, body);
+    track('group_created', auth.id, { groupId: group.id }).catch(() => void 0);
     return reply.status(201).send({
       ...group,
       isAdmin: true,
@@ -78,7 +80,9 @@ const routes: FastifyPluginAsync<GroupsRouteOptions> = async (app, opts) => {
   // ---------------------------------------------------------------- INVITES
 
   // POST /groups/:id/invite — admin invites by username OR regenerates invite code
-  app.post('/groups/:id/invite', async (req) => {
+  app.post('/groups/:id/invite', {
+    config: { rateLimit: { max: 20, timeWindow: '1 hour' } },
+  }, async (req) => {
     const auth = await app.requireAuth(req);
     const { id } = idParam.parse(req.params);
     const body = inviteBodySchema.parse(req.body ?? {});
@@ -145,6 +149,44 @@ const routes: FastifyPluginAsync<GroupsRouteOptions> = async (app, opts) => {
       throw new HttpError(404, 'GROUP_NOT_FOUND', 'Group not found');
     }
     return { inviteCode: updated.inviteCode };
+  });
+
+  // GET /invites/:code/preview — public group preview (no auth required)
+  app.get('/invites/:code/preview', async (req) => {
+    const { code } = z.object({ code: z.string().min(1) }).parse(req.params);
+
+    const [group] = await db
+      .select({
+        id: schema.groups.id,
+        name: schema.groups.name,
+        avatarUrl: schema.groups.avatarUrl,
+      })
+      .from(schema.groups)
+      .where(
+        and(eq(schema.groups.inviteCode, code), isNull(schema.groups.deletedAt)),
+      )
+      .limit(1);
+
+    if (!group) {
+      throw new HttpError(404, 'INVITE_INVALID', 'Invite code not found');
+    }
+
+    const [memberCount] = await db
+      .select({ cnt: sql<number>`COUNT(*)::int` })
+      .from(schema.groupMemberships)
+      .where(
+        and(
+          eq(schema.groupMemberships.groupId, group.id),
+          isNull(schema.groupMemberships.leftAt),
+        ),
+      );
+
+    return {
+      id: group.id,
+      name: group.name,
+      avatarUrl: group.avatarUrl,
+      memberCount: memberCount?.cnt ?? 0,
+    };
   });
 
   // POST /groups/join — join by invite code

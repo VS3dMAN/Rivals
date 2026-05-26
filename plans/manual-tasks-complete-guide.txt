@@ -1,0 +1,1324 @@
+================================================================================
+RIVALS — COMPLETE MANUAL TASK GUIDE
+================================================================================
+Generated: 2026-05-26
+Purpose: Step-by-step instructions for ALL dashboard/credential work needed to
+         fully retire the remaining implementation checklist.
+
+Audience: The developer who will execute these tasks.
+
+Note: This supplements plans/manual-tasks-01-to-04.txt (which covers phases 01–04).
+      This guide covers the NEW manual work from the A6–A10 implementation sprint.
+
+================================================================================
+SECTION A: CLOUDFLARE R2 (PROOF PHOTOS)
+================================================================================
+
+TASK A1 — Create R2 bucket "rivals-proofs"
+
+Context:
+  The Rivals app lets users upload proof photos of habit completions.
+  These photos are stored in Cloudflare R2 (S3-compatible object storage).
+  The bucket and API token do not exist yet.
+
+Prerequisites:
+  - Cloudflare account with R2 enabled (free tier is fine)
+  - Access to fill .env files
+
+Step 1: Create the bucket
+  Go to https://dash.cloudflare.com → R2 Object Storage → "Create bucket"
+  Bucket name: rivals-proofs (exact match)
+  Location: Automatic
+  Click "Create"
+  Wait for creation (< 1 min).
+
+Step 2: Configure CORS
+  Click the "rivals-proofs" bucket → Settings tab
+  Scroll to "CORS policy" → "Add CORS policy"
+  Fill:
+    Allowed origins: *
+    Allowed methods: PUT, GET, HEAD
+    Allowed headers: Content-Type, Content-Length
+    Max age: 3600
+  Click "Save"
+
+Step 3: Enable public read (R2.dev subdomain)
+  Still in Settings, find "R2.dev subdomain"
+  Toggle it ON
+  Cloudflare assigns a URL like: https://pub-abc123...r2.dev
+  COPY this URL — it becomes R2_PUBLIC_BASE_URL
+
+Step 4: Create API token
+  Leave the bucket settings page.
+  Go back to R2 overview (main R2 page).
+  Top right: "Manage R2 API Tokens"
+  "Create API Token"
+  Name: rivals-api-staging
+  Permissions: "Object Read & Write"
+  Bucket restrictions: Select "rivals-proofs" (not "All buckets")
+  Click "Create API Token"
+  Cloudflare shows 3 values ONCE — copy all:
+    - Access Key ID
+    - Secret Access Key
+    - Account ID (shown at top of R2 dashboard, also in URL)
+
+Step 5: Fill .env locally
+  Open packages/api/.env
+  Find the R2 section (look for R2_ACCOUNT_ID)
+  Fill:
+    R2_ACCOUNT_ID=<Account ID from step 4>
+    R2_ACCESS_KEY_ID=<Access Key ID>
+    R2_SECRET_ACCESS_KEY=<Secret Access Key>
+    R2_PUBLIC_BASE_URL=https://pub-...r2.dev
+    R2_BUCKET=rivals-proofs
+  Save the file.
+
+Step 6: Add to Railway staging environment
+  Go to https://railway.app → your project → API service → Variables
+  Add each of the 5 variables above.
+  Railway redeploys automatically.
+  Wait for green health check.
+
+Step 7: Verify
+  Once Railway is green:
+  curl https://your-api-url.up.railway.app/health
+  Should return 200.
+  In the Rivals app, complete a habit with a photo.
+  Upload should succeed end-to-end.
+
+Troubleshooting:
+  - CORS error on photo PUT: re-check CORS policy in R2 bucket settings
+  - "Access Denied" on token: re-check API token has "rivals-proofs" selected
+  - R2_PUBLIC_BASE_URL 404: confirm subdomain toggle was ON
+
+================================================================================
+TASK A2 — Create Supabase "avatars" bucket
+================================================================================
+
+Context:
+  Users and group admins can upload avatar images (profile pics, group icons).
+  Stored in Supabase Storage, which has built-in RLS.
+
+Prerequisites:
+  - Supabase project (rivals-staging or similar)
+  - Access to Supabase dashboard
+
+Step 1: Navigate to Storage
+  Go to https://supabase.com/dashboard → select your project
+  Left sidebar: "Storage"
+
+Step 2: Create bucket
+  "New bucket"
+  Name: avatars (exact)
+  Toggle "Public bucket" to ON (anyone can read, RLS controls write)
+  Click "Save"
+  Wait a few seconds.
+
+Step 3: Create upload policy (authenticated users only)
+  Click the "avatars" bucket
+  "Policies" tab
+  "New policy" → "For full customization"
+  Fill:
+    Policy name: allow_authenticated_upload
+    Allowed operations: INSERT
+    Target roles: authenticated
+    USING expression: bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]
+  This means a user can only write to a folder named after their user ID.
+  Click "Review" → "Save policy"
+
+Step 4: Create update policy (for re-uploads)
+  "New policy" again
+  Policy name: allow_authenticated_update
+  Allowed operations: UPDATE
+  Target roles: authenticated
+  USING: bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]
+  Save.
+
+Step 5: Verify public read policy
+  Because the bucket is "Public", SELECT is auto-allowed for public/anon.
+  Verify there is a policy that says "public" role, "SELECT" operation.
+  If missing, create one:
+    Policy name: allow_public_read
+    Allowed operations: SELECT
+    Target roles: public
+    USING: bucket_id = 'avatars'
+
+Step 6: Test
+  In the app, go to Profile → edit avatar, or Group Settings → edit group avatar.
+  Tap the placeholder and pick a photo.
+  Upload should succeed.
+  Avatar should appear immediately.
+
+Troubleshooting:
+  - 403 on upload: check RLS policy — confirm auth.uid() matches the folder name
+  - Avatar not visible: confirm public read policy exists
+
+================================================================================
+TASK A3 — Fill DATABASE_URL in Supabase
+================================================================================
+
+Context:
+  The API needs to connect to the Supabase Postgres database.
+  DATABASE_URL is a connection string with the Supabase password.
+
+Prerequisites:
+  - Supabase project
+  - Access to Supabase Settings
+
+Step 1: Get connection string
+  Supabase dashboard → your project → Settings → Database
+  Scroll down to "Connection string"
+  Switch tab to "URI"
+  You will see a full URI:
+    postgresql://postgres:XXXX@db.YYYY.supabase.co:5432/postgres
+  COPY the entire string.
+
+Step 2: Choose the right port
+  For Fastify on Railway: use Session mode (port 5432).
+  (PgBouncer / Transaction mode is port 6543 — only if Railway uses PgBouncer.)
+
+Step 3: Fill .env locally
+  Open packages/api/.env
+  Replace the DATABASE_URL line with the full URI you copied.
+  Save.
+
+Step 4: Add to Railway
+  Railway → API service → Variables
+  Add or update DATABASE_URL with the same value.
+  Railway redeploys.
+
+Step 5: Verify
+  After Railway is green:
+  curl https://your-api-url.up.railway.app/health
+  Should return 200 with connection details.
+
+Troubleshooting:
+  - "failed to connect": re-paste the URI, check for typos in password
+  - "permission denied": confirm you used the correct Supabase database password
+
+================================================================================
+TASK A4 — Enable pg_cron and run challenge jobs
+================================================================================
+
+Context:
+  The app has cron jobs that automatically transition challenge windows
+  (upcoming → active → completed) and send "window ending soon" notifications.
+  These are SQL-based jobs that run on the Supabase database itself.
+
+Prerequisites:
+  - Supabase project
+  - Access to SQL Editor
+
+Step 1: Enable pg_cron extension
+  Supabase dashboard → Database → Extensions
+  Search for "pg_cron"
+  Toggle to enable.
+  Wait 10–20 seconds.
+
+Step 2: Run challenge-transitions job
+  Supabase → SQL Editor → "New query"
+  Open the file packages/api/src/jobs/challenge-transitions.sql
+  Copy ALL the SQL.
+  Paste into the SQL Editor.
+  Click "Run" (or Ctrl+Enter).
+  You should see "Query executed successfully" (no rows affected is normal).
+
+Step 3: Run challenge-ending-soon job
+  Supabase → SQL Editor → "New query"
+  Open packages/api/src/jobs/challenge-ending-soon.sql
+  Copy ALL the SQL.
+  Paste and Run.
+  Expect success.
+
+Step 4: Verify jobs are registered
+  SQL Editor → "New query"
+  Paste:
+    SELECT jobid, jobname, schedule, command FROM cron.job;
+  Run.
+  You should see rows for:
+    - challenge-activate (schedule: 0 * * * *)
+    - challenge-complete (schedule: 5 * * * *)
+    - challenge-ending-soon (schedule: 10 * * * *)
+  If any are missing, re-run their SQL from steps 2–3.
+
+Step 5: Monitor execution
+  After an hour, check:
+    SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;
+  You should see successful runs.
+  If errors, the "command" and "message" columns will show why.
+
+Troubleshooting:
+  - "job already exists": run these first to unschedule:
+      SELECT cron.unschedule('challenge-activate');
+      SELECT cron.unschedule('challenge-complete');
+      SELECT cron.unschedule('challenge-ending-soon');
+    Then re-run the SQL from steps 2–3.
+  - pg_cron not found: confirm extension was enabled in step 1
+
+================================================================================
+TASK A5 — Run leaderboard backfill script
+================================================================================
+
+Context:
+  Task 04 (leaderboard engine) was implemented weeks ago, but any habit logs
+  from BEFORE that deploy are missing from the leaderboard_scores table.
+  This script retroactively computes scores for all existing (user, group) pairs.
+
+Prerequisites:
+  - API code (task 04 or later) is deployed to Railway
+  - DATABASE_URL is set locally (from A3 above)
+  - You have git access to Rivals repo
+
+Step 1: Confirm task 04 is deployed
+  Go to Railway → API service → Deployments
+  Confirm the task-04 commit or later is green/live.
+
+Step 2: Set DATABASE_URL locally
+  Open your shell (terminal / PowerShell).
+  Set the environment variable:
+    Bash: export DATABASE_URL="postgresql://postgres:xxx@db.yyy.supabase.co:5432/postgres"
+    PowerShell: $env:DATABASE_URL = "postgresql://postgres:xxx@db.yyy.supabase.co:5432/postgres"
+  (Same value as packages/api/.env)
+
+Step 3: Run the script
+  From the project root (e:\Builds\Rivals):
+    pnpm --filter @rivals/api run backfill:leaderboard
+  Or if that command doesn't exist:
+    pnpm --filter @rivals/api exec ts-node src/scripts/backfill-leaderboard.ts
+  The script will print progress lines like:
+    "Processing (user: abc, group: def)..."
+  When it finishes, you will see:
+    "Backfill complete. X rows processed."
+
+Step 4: Verify the results
+  Open Supabase SQL Editor.
+  Run:
+    SELECT COUNT(*) FROM leaderboard_scores WHERE score > 0;
+    SELECT COUNT(*) FROM streaks WHERE current_streak > 0;
+  Both counts should be > 0 if your staging environment has logs.
+  Open the Rivals app and check the Leaderboard for a group — scores should appear.
+
+Troubleshooting:
+  - "No such file": confirm packages/api/src/scripts/backfill-leaderboard.ts exists
+  - "Permission denied": re-check DATABASE_URL is set in your shell
+  - "Connection timeout": confirm the URL is reachable and password is correct
+
+================================================================================
+TASK A6 — Add GitHub Actions secrets
+================================================================================
+
+Context:
+  CI/CD pipelines run in GitHub and need credentials (Railway token, Cloudflare,
+  Supabase, Firebase, PostHog, Sentry DSN, etc.).
+  All are stored as repository secrets.
+
+Prerequisites:
+  - GitHub repository access
+  - Admin or Secrets permission
+
+Step 1: Navigate to secrets
+  Go to your GitHub repo → Settings → Secrets and variables → Actions
+  Click "New repository secret" for each item below.
+
+Step 2: Add RAILWAY_TOKEN
+  Where to get it:
+    - https://railway.app → account icon top right → Account Settings
+    - Left sidebar: Tokens
+    - "New Token" → name it "github-actions"
+    - Copy the token value (shown once only)
+  Add as secret: RAILWAY_TOKEN = <the token>
+
+Step 3: Add CLOUDFLARE_API_TOKEN
+  Where to get it:
+    - https://dash.cloudflare.com → account name top right → My Profile
+    - Left sidebar: API Tokens
+    - "Create Token" → use "Edit Cloudflare Workers" template OR create custom:
+      Permissions: Cloudflare Pages — Edit
+      Resources: All zones (or specific zone if you own rivals.app)
+    - Copy the token
+  Add as secret: CLOUDFLARE_API_TOKEN = <the token>
+
+Step 4: Add CLOUDFLARE_ACCOUNT_ID
+  In the Cloudflare dashboard, look at the URL:
+    https://dash.cloudflare.com/<ACCOUNT_ID>/...
+  Or go to any Cloudflare page → right sidebar, "Account ID" is shown.
+  Copy it.
+  Add as secret: CLOUDFLARE_ACCOUNT_ID = <the ID>
+
+Step 5: Add EXPO_PUBLIC_API_URL
+  This is the public URL of your deployed API on Railway.
+  Go to Railway → API service → Settings
+  Under Domains, copy the auto-generated URL (looks like https://rivals-api-xxx.up.railway.app)
+  Add as secret: EXPO_PUBLIC_API_URL = <the URL>
+
+Step 6: Add EXPO_PUBLIC_SUPABASE_URL
+  Supabase dashboard → your project → Settings → API
+  Under "Project URL", copy the full URL (https://xxxx.supabase.co)
+  Add as secret: EXPO_PUBLIC_SUPABASE_URL = <the URL>
+
+Step 7: Add EXPO_PUBLIC_SUPABASE_ANON_KEY
+  Same page (Supabase Settings → API).
+  Under "Project API keys", find the "anon public" key (long JWT string starting with "eyJ").
+  Copy it.
+  Add as secret: EXPO_PUBLIC_SUPABASE_ANON_KEY = <the key>
+
+Step 8: Add EXPO_PUBLIC_SENTRY_DSN (optional but recommended)
+  Where to get it:
+    - https://sentry.io → Projects → select or create "rivals-mobile"
+    - Go to Settings → Projects → the project → Client Keys (DSN)
+    - Copy the DSN (looks like https://abc123@o123456.ingest.sentry.io/789)
+  Add as secret: EXPO_PUBLIC_SENTRY_DSN = <the DSN>
+
+Step 9: Verify all secrets are registered
+  Back in Settings → Secrets → Actions, you should see:
+    ☑ RAILWAY_TOKEN
+    ☑ CLOUDFLARE_API_TOKEN
+    ☑ CLOUDFLARE_ACCOUNT_ID
+    ☑ EXPO_PUBLIC_API_URL
+    ☑ EXPO_PUBLIC_SUPABASE_URL
+    ☑ EXPO_PUBLIC_SUPABASE_ANON_KEY
+    ☑ EXPO_PUBLIC_SENTRY_DSN
+  (Names are shown; values are hidden.)
+
+Step 10: Test with a push
+  Make a trivial commit (e.g., add a blank line to README).
+  git push to main.
+  Go to GitHub Actions tab.
+  ci.yml should run (lint + typecheck + test).
+  If green, secrets are wired.
+  If red, check the logs — most common: Supabase/API URL typo.
+
+Troubleshooting:
+  - "Repository secrets error": confirm you have admin permissions
+  - CI fails with "secret not found": re-type the secret name (case-sensitive)
+  - API auth fails in CI: re-check the EXPO_PUBLIC_SUPABASE_ANON_KEY value
+
+================================================================================
+TASK A7 — Set up Firebase Web Push
+================================================================================
+
+Context:
+  Web push (Chrome, Safari, Firefox) is delivered via Firebase Cloud Messaging (FCM).
+  You need a Firebase project, a Web Push VAPID key pair, and credentials in the API.
+
+Prerequisites:
+  - Google Cloud account
+  - Firebase access
+
+Step 1: Create a Firebase project (or use existing)
+  Go to https://console.firebase.google.com
+  "Create a project" or select existing.
+  Name: rivals (or rivals-staging).
+  If creating, enable Google Analytics (recommended).
+
+Step 2: Enable Cloud Messaging
+  In your Firebase project → Settings → Cloud Messaging tab
+  You should see a "Server API key" (legacy) and "Sender ID".
+  Under "Web Push certificates", if empty, click "Generate key pair".
+  This generates a VAPID key pair. Copy both:
+    - VAPID public key → EXPO_PUBLIC_FIREBASE_VAPID_KEY
+    - VAPID private key → save for later (Firebase config step)
+
+Step 3: Get Firebase Web config
+  In Firebase → Settings → General tab
+  Scroll down to "Your apps" section.
+  If no web app yet, click "Add app" → "Web".
+  Register app as "rivals-web".
+  Firebase shows:
+    {
+      apiKey: "...",
+      authDomain: "...",
+      projectId: "...",
+      storageBucket: "...",
+      messagingSenderId: "...",
+      appId: "..."
+    }
+  Copy this config object.
+
+Step 4: Fill app.config.ts
+  Open apps/mobile/app.config.ts (or wherever Expo config is sourced).
+  Add to the "extra" section:
+    extra: {
+      ...,
+      firebaseApiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+      firebaseAuthDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+      firebaseProjectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+      firebaseStorageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+      firebaseMessagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+      firebaseAppId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+      firebaseVapidKey: process.env.EXPO_PUBLIC_FIREBASE_VAPID_PUBLIC_KEY,
+    }
+
+Step 5: Generate server credentials (FCM HTTP v1)
+  In Firebase → Settings → Service Accounts
+  "Generate new private key".
+  Downloads a JSON file with the full service account (includes private_key, client_email, etc.).
+  KEEP THIS SAFE — do not commit it.
+  Copy the entire JSON object.
+
+Step 6: Fill API .env
+  Open packages/api/.env
+  Add:
+    FIREBASE_SERVICE_ACCOUNT_JSON=<paste the entire JSON object from step 5>
+  (Or set it as a Railway environment variable if you prefer not to paste in .env.)
+
+Step 7: Build the service worker config
+  The web app's service worker (apps/mobile/public/firebase-messaging-sw.js)
+  reads Firebase config from /firebase-config.js.
+  This file is generated at build/deploy time from environment variables.
+  Make sure your deployment pipeline does:
+    cat > apps/mobile/public/firebase-config.js << EOF
+    window.firebaseConfig = {
+      apiKey: "$EXPO_PUBLIC_FIREBASE_API_KEY",
+      authDomain: "$EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN",
+      projectId: "$EXPO_PUBLIC_FIREBASE_PROJECT_ID",
+      storageBucket: "$EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET",
+      messagingSenderId: "$EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
+      appId: "$EXPO_PUBLIC_FIREBASE_APP_ID"
+    };
+    EOF
+  (Cloudflare Pages build script or GitHub Actions should do this.)
+
+Step 8: Add env vars to Railway (API) and GitHub Secrets (mobile build)
+  Railway → API service → Variables:
+    FIREBASE_SERVICE_ACCOUNT_JSON=<the JSON>
+  GitHub Secrets (for mobile build):
+    EXPO_PUBLIC_FIREBASE_API_KEY=...
+    EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+    EXPO_PUBLIC_FIREBASE_PROJECT_ID=...
+    EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+    EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+    EXPO_PUBLIC_FIREBASE_APP_ID=...
+    EXPO_PUBLIC_FIREBASE_VAPID_PUBLIC_KEY=...
+
+Step 9: Test registration
+  Deploy the mobile app to the web (EAS web build or local pnpm build).
+  Open in Chrome.
+  You should be prompted for notification permission.
+  Grant it.
+  Check browser console for [push-web] "Registered token".
+  Check Supabase push_tokens table — a new row with platform='web' should appear.
+
+Step 10: Send a test notification
+  Via the API (if admin endpoint exists):
+    POST /admin/push/test { token: "...", title: "Test" }
+  Or manually via Firebase Console → Cloud Messaging → Send your first message.
+  Confirm notification arrives on the Chrome tab.
+
+Troubleshooting:
+  - Firebase init fails: check apiKey and projectId are correct
+  - Service worker fails to load: confirm /firebase-config.js is generated and deployed
+  - "onBackgroundMessage not fired": check sw.js event listener is registered
+  - Token registration 401: confirm EXPO_PUBLIC_SUPABASE_ANON_KEY is correct
+
+================================================================================
+TASK A8 — Set up PostHog analytics
+================================================================================
+
+Context:
+  PostHog is the analytics SDK used in mobile and server code.
+  Without a PostHog project, all track() calls no-op silently.
+
+Prerequisites:
+  - PostHog account (free tier is enough)
+
+Step 1: Create a PostHog project
+  Go to https://posthog.com → sign up or log in
+  "Create project" → name it "Rivals" or "Rivals Production"
+  Platform: React Native (for mobile)
+  PostHog generates a Project API Key (looks like phc_abc123...)
+
+Step 2: Copy the API key
+  In PostHog project → Settings → API key
+  Copy the key (should start with "phc_").
+
+Step 3: Get the host (optional, default is cloud)
+  PostHog Cloud uses https://us.i.posthog.com or https://eu.i.posthog.com.
+  If self-hosted, use your own domain.
+  For simplicity, use the cloud default (PostHog SDK will use it automatically).
+
+Step 4: Fill mobile .env
+  Open apps/mobile/.env or .env.local
+  Add:
+    EXPO_PUBLIC_POSTHOG_API_KEY=phc_abc123...
+    EXPO_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com (or omit for default)
+
+Step 5: Fill API .env
+  Open packages/api/.env
+  Add:
+    POSTHOG_API_KEY=phc_abc123...
+    POSTHOG_HOST=https://us.i.posthog.com (optional)
+
+Step 6: Add to GitHub Secrets (for CI/CD mobile builds)
+  GitHub → Settings → Secrets → Actions
+  Add:
+    EXPO_PUBLIC_POSTHOG_API_KEY=phc_abc123...
+
+Step 7: Deploy and test
+  Deploy API to Railway.
+  Build and deploy mobile app.
+  In the app, perform an action (sign up, complete a habit, navigate a screen).
+  Go to PostHog dashboard → Events.
+  You should see events like "screen_view", "complete_pressed", "proof_captured", etc.
+  Server-side events like "signup_completed", "group_created" should also appear.
+
+Step 8: Create dashboards (optional)
+  In PostHog, create a dashboard with:
+    - Daily active users
+    - Habit completions per day
+    - Proof upload success rate
+    - Badge award events
+    - Session length
+  These help monitor product health.
+
+Troubleshooting:
+  - No events appearing: confirm POSTHOG_API_KEY matches the project API key
+  - Events appear but with wrong properties: check track() calls pass the right props
+  - "Network error": confirm the PostHog host URL is reachable from your app
+
+================================================================================
+TASK A9 — Set up Sentry alert rules
+================================================================================
+
+Context:
+  Sentry monitors errors in production (mobile + API).
+  Alert rules define which errors trigger notifications (Slack, PagerDuty, email).
+
+Prerequisites:
+  - Sentry account with rivals-mobile and rivals-api projects already created
+  - Slack workspace (optional but recommended)
+  - PagerDuty account (optional but recommended for on-call)
+
+Step 1: Open Sentry projects
+  Go to https://sentry.io → Organizations → Rivals
+  You should see two projects:
+    - rivals-api
+    - rivals-mobile
+
+Step 2: Integrate Slack (optional but recommended)
+  Sentry → Settings → Integrations → Slack
+  "Install Slack" → authorize Sentry to your Slack workspace
+  Select which channels to notify (e.g., #rivals-oncall, #rivals-mobile)
+
+Step 3: Integrate PagerDuty (optional, for on-call)
+  Sentry → Settings → Integrations → PagerDuty
+  Authorize with your PagerDuty account
+  Select which PagerDuty services to trigger (e.g., Rivals primary)
+
+Step 4: Apply alert rules (rivals-api)
+  Go to rivals-api project → Alerts
+  For each rule in infra/sentry/alert-rules.yml that starts with "API —":
+    "Create Alert Rule" → fill the details:
+      - Name: "error rate spike" (or the rule name)
+      - Condition: "failure_rate > 0.02" (or as specified in YAML)
+      - Action: "Notify Slack" → select #rivals-oncall
+      - Action: "Notify PagerDuty" → select service
+    Click "Save Rule"
+  Repeat for other API rules (unhandled exception, proof-upload failures, etc.)
+
+Step 5: Apply alert rules (rivals-mobile)
+  Go to rivals-mobile project → Alerts
+  Apply similar rules, but for mobile:
+    - "crash-free sessions below SLO" → notify #rivals-mobile
+    - "new release regression" → notify #rivals-mobile
+    - "first-seen issue in latest release" → notify #rivals-mobile
+
+Step 6: Test the rules
+  To verify a rule triggers:
+    - Manually trigger an error in the app or API
+    - Or use Sentry's "Test Alert" feature (if available)
+    - Confirm Slack/PagerDuty receives the notification
+
+Step 7: Create a runbook link
+  In Sentry → Project Settings → Integrations
+  Add a link to the runbook (Vibe Code/runbook.md) in the alert action:
+    "Notify Slack" with custom message:
+      "Alert triggered. See runbook: [link to rivals.app/docs/runbook.md]"
+
+Step 8: Monitor the dashboard
+  Sentry → Issues
+  You should see any errors or crashes.
+  Click an issue to see the stack trace, affected users, frequency.
+  Assign to team member and set status (Ongoing, Regressed, Resolved).
+
+Troubleshooting:
+  - Slack notification not sending: confirm Slack integration is authorized
+  - PagerDuty not firing: confirm PagerDuty service is linked to the rule
+  - "Condition not met": trace through the rule logic — is the error rate actually > 2%?
+
+================================================================================
+TASK A10 — Set up custom domain (rivals.app)
+================================================================================
+
+Context:
+  The mobile app has links to https://rivals.app/privacy and /terms.
+  These routes must resolve and serve the HTML pages.
+
+Prerequisites:
+  - Domain registration (rivals.app or similar)
+  - Cloudflare account (for DNS + Pages)
+
+Step 1: Register the domain
+  Use any registrar (Namecheap, GoDaddy, Google Domains, etc.).
+  Register rivals.app (or your chosen domain).
+
+Step 2: Point DNS to Cloudflare
+  Go to your registrar's DNS settings.
+  Update the nameservers to Cloudflare's:
+    NS1.CLOUDFLARE.COM
+    NS2.CLOUDFLARE.COM
+  (Exact names vary by registrar — Cloudflare docs will show the exact list.)
+  Wait 24 hours for propagation (though often faster).
+
+Step 3: Add domain to Cloudflare Pages
+  Cloudflare → Pages → your project (rivals-web) → Custom domain
+  "Add custom domain"
+  Enter: rivals.app
+  Cloudflare confirms the domain is delegated to it.
+
+Step 4: Enable SSL
+  Cloudflare should automatically enable SSL/TLS.
+  Confirm in Cloudflare → SSL/TLS → Edge Certificates.
+  You should see a certificate for rivals.app (issued by Let's Encrypt).
+
+Step 5: Add routing rules for /privacy and /terms
+  The pages are served from the /public directory.
+  Cloudflare Pages automatically serves:
+    /privacy.html → accessible as /privacy
+    /terms.html → accessible as /terms
+  (Cloudflare Pages has a built-in rule that strips .html for clean URLs.)
+  If it doesn't work, add a redirect in _redirects (already created):
+    /privacy   /privacy.html   200
+    /terms     /terms.html     200
+
+Step 6: Test the routes
+  Open in a browser:
+    https://rivals.app/privacy
+    https://rivals.app/terms
+  Both should load the HTML pages.
+  In the app, tap a Privacy/TOS link — it should open in a browser and load.
+
+Step 7: Update the PrivacyScreen links (if hardcoded)
+  In apps/mobile/src/screens/PrivacyScreen.tsx, the Privacy/TOS links are:
+    https://rivals.app/privacy
+    https://rivals.app/terms
+  Once the domain resolves, these links will work in the app.
+
+Troubleshooting:
+  - Domain not resolving: wait 24 hours for DNS propagation; check nameservers with `nslookup rivals.app`
+  - SSL certificate pending: Cloudflare usually issues within hours; check Edge Certificates page
+  - /privacy returns 404: confirm privacy.html exists in apps/mobile/public/ and is deployed
+
+================================================================================
+TASK A11 — App Store / Play Console accounts
+================================================================================
+
+Context:
+  To release an app on iOS and Android, you need developer accounts.
+  These have annual/one-time costs and require financial setup.
+
+Prerequisites:
+  - Credit card
+  - Apple ID (for iOS)
+  - Google account (for Android)
+
+Step 1: Apple Developer Program
+  Go to https://developer.apple.com
+  "Enroll" → follow the flow:
+    - Verify your identity
+    - Accept legal agreements
+    - Pay $99/year (charged to your credit card)
+  Wait for approval (usually hours to days).
+
+Step 2: Google Play Console
+  Go to https://play.google.com/console
+  Sign in with your Google account.
+  "Create app" → set it up:
+    - App name: Rivals
+    - Category: Health & Fitness (or Productivity)
+    - Pay $25 one-time registration fee
+  Google usually approves within hours.
+
+Step 3: Set up store-assets
+  Gather final marketing assets:
+    - App icon (1024x1024 PNG)
+    - Screenshots (5+ per device class)
+    - Listing copy (title, short description, full description)
+    - Permissions justification (why camera, photo library, notification)
+  Put them in store-assets/ directory (already created).
+
+Step 4: Add app to Apple Developer account
+  Apple Developer → Identifiers → "Register a new identifier"
+  Bundle ID: com.rivals.app (or your choice)
+  Capabilities: Push Notifications, Sign in with Apple (if using)
+
+Step 5: Create signing certificates
+  Apple Developer → Certificates → "Create a new certificate"
+    - iOS App Development (for test builds)
+    - iOS Distribution (for App Store release)
+  Download and install on your Mac.
+  (EAS Build handles this automatically if you use EAS.)
+
+Step 6: Create provisioning profiles
+  Apple Developer → Provisioning Profiles → "Create a new profile"
+    - App ID: select the one from step 4
+    - Certificates: select the ones from step 5
+    - Devices: list all test devices (can add later)
+  Download and install.
+
+Step 7: Set up Play Console
+  Play Console → Setup → App info
+  Fill in:
+    - App name: Rivals
+    - Category: Health & Fitness
+    - Supported devices: phones (and tablets if applicable)
+    - Content rating: Everyone (or Teen if flagged for UGC)
+    - Pricing: Free
+
+Step 8: Prepare builds
+  Run EAS builds:
+    iOS: eas build --profile production --platform ios
+    Android: eas build --profile production --platform android
+  Wait for builds to complete (usually 15–30 min each).
+
+Step 9: Create app listings (iOS)
+  App Store Connect → Your app → App Information
+  Fill in:
+    - Name: Rivals
+    - Subtitle: Habit Streaks With Friends
+    - Description: <from store-assets/copy/listing-en.md>
+    - Keywords: habits, streaks, friends, fitness
+    - Support URL: https://rivals.app (or support email)
+    - Privacy Policy URL: https://rivals.app/privacy
+    - Screenshot images and previews (up to 10 per device class)
+
+Step 10: Create app listings (Android)
+  Play Console → Google Play listing
+  Fill in:
+    - Title: Rivals
+    - Short description: <from listing>
+    - Full description: <from listing>
+    - Screenshots: 5+ (1080x1920)
+    - Feature graphic: 1024x500
+    - Privacy Policy: https://rivals.app/privacy
+    - Support email: support@rivals.app (or equivalent)
+
+Step 11: Content rating (both platforms)
+  iOS: Age rating (4+, 12+, 17+)
+  Android: Content rating questionnaire
+  Both ask: profanity, violence, sexual content, UGC, etc.
+  Answer honestly. Choose "Everyone" or "Teen" based on user photo uploads.
+
+Step 12: Submit for review
+  iOS: App Store Connect → Version → Submit for Review
+  Android: Play Console → Release → Submit to Production
+  Both platforms review before going live (usually 1–3 days).
+
+Troubleshooting:
+  - Build failed: check EAS logs; common issues are signing certs or provisioning profiles
+  - Submission rejected: read the rejection reason; common: privacy policy missing, UGC not moderated, permissions not justified
+  - "Bundle ID already exists": choose a different bundle ID
+
+================================================================================
+TASK A12 — Google OAuth (optional)
+================================================================================
+
+Context:
+  Users can sign in with their Google account instead of creating a password.
+  Requires OAuth credentials from Google Cloud.
+
+Prerequisites:
+  - Google Cloud project (can reuse existing or create new)
+  - Access to Google Cloud Console
+
+Step 1: Create OAuth 2.0 credentials (Google Cloud Console)
+  https://console.cloud.google.com → select or create a project
+  APIs & Services → Credentials → "Create Credentials" → OAuth 2.0 Client ID
+  Application type: Web application
+  Authorized redirect URIs:
+    (Add these three:)
+    https://<your-supabase-project>.supabase.co/auth/v1/callback
+    rivals://auth/callback (for mobile deep link)
+    https://rivals.app/auth/callback (if you have the custom domain)
+  Click "Create"
+  Google shows: Client ID and Client Secret (save both)
+
+Step 2: Add OAuth to Supabase
+  Supabase → Authentication → Providers → Google
+  Toggle ON
+  Paste the Client ID and Client Secret from step 1
+  Click "Save"
+
+Step 3: Confirm deep-link configuration in app.config.ts
+  apps/mobile/app.config.ts should have:
+    scheme: "rivals"
+  This enables the rivals://auth/callback deep link.
+
+Step 4: Test
+  In the app, tap "Continue with Google" on the sign-up screen.
+  Browser opens Google login page.
+  Sign in, authorize Rivals.
+  Browser redirects back to the app (rivals:// deep link).
+  App should detect the session and navigate to the dashboard.
+
+Troubleshooting:
+  - Redirect URI mismatch: double-check the URIs in Google Cloud match Supabase + app.config.ts exactly
+  - Deep link not firing: confirm app.config.ts has the scheme; you may need to rebuild the Expo app
+
+================================================================================
+TASK A13 — k6 load testing
+================================================================================
+
+Context:
+  The load test script simulates 500 concurrent users uploading proof photos.
+  It verifies the system can handle peak load without errors.
+
+Prerequisites:
+  - k6 installed locally (https://k6.io/docs/get-started/installation/)
+  - Staging API deployed and healthy
+
+Step 1: Install k6
+  macOS: brew install k6
+  Windows: download from https://k6.io/docs/get-started/installation/ or use winget
+  Linux: apt-get install k6 or similar
+  Verify: k6 --version
+
+Step 2: Prepare the test script
+  The file packages/api/loadtest/proof-upload.k6.js should exist.
+  It defines a scenario with:
+    - 500 virtual users (ramping up over a few minutes)
+    - Each user uploads a proof photo (5 MB file)
+    - Duration: 5 minutes
+    - Thresholds: P95 < 90s, error rate < 2%
+
+Step 3: Set env vars
+  Shell:
+    export API_URL=https://your-staging-api.up.railway.app
+    export API_TOKEN=<a valid JWT from a test account>
+  (Or pass them as k6 env flags: -e API_URL=... -e API_TOKEN=...)
+
+Step 4: Run the test
+  From the project root:
+    k6 run packages/api/loadtest/proof-upload.k6.js
+  You will see live progress:
+    VUs: 5/500, Rate: 10 uploads/s, Errors: 0
+  The test runs for the specified duration (usually 5 min).
+
+Step 5: Capture results
+  k6 outputs a summary at the end:
+    http_req_duration:
+      avg: 15s
+      max: 85s
+      p(95): 45s
+      p(99): 78s
+    http_reqs: 5000
+    http_errors: 42 (0.84%)
+  Copy this output.
+
+Step 6: Paste into perf-report.md
+  Open Vibe Code/perf-report.md
+  Find the "Load test summary" section.
+  Fill in:
+    Virtual users: 500
+    Duration: 5 min
+    P50: ...
+    P95: ...
+    P99: ...
+    Error rate: ...
+  If P95 < 90s and error rate < 2%, mark as PASS.
+
+Step 7: Investigate failures (if any)
+  If P95 > 90s or error rate > 2%:
+    - Check Railway API logs for errors
+    - Check R2 status page
+    - Look for slow queries in Supabase logs
+    - File a ticket to optimize the slow path
+  Rerun the test after fixes.
+
+Troubleshooting:
+  - "Connection refused": confirm API_URL is correct and API is running
+  - "401 Unauthorized": confirm API_TOKEN is a valid JWT
+  - Spike in P95 midway through: this is expected as ramp-up happens; focus on steady-state numbers
+  - High error rate: check API logs for the root cause (500 errors, rate limits, R2 timeouts, etc.)
+
+================================================================================
+TASK A14 — Capture EXPLAIN ANALYZE queries
+================================================================================
+
+Context:
+  The leaderboard is a complex query involving joins across multiple tables.
+  EXPLAIN ANALYZE shows the query plan and actual execution time.
+  This helps identify missing indexes or inefficient queries.
+
+Prerequisites:
+  - DATABASE_URL set locally
+  - packages/api/src/scripts/explain-leaderboard.ts exists
+  - Staging database populated with at least 50k habit logs
+
+Step 1: Run the explain script
+  From the project root:
+    DATABASE_URL=postgres://... \
+      pnpm --filter @rivals/api exec ts-node src/scripts/explain-leaderboard.ts
+  The script runs 4 EXPLAIN ANALYZE queries and prints the plans.
+
+Step 2: Capture the output
+  The script outputs JSON or text like:
+    EXPLAIN ANALYZE for leaderboard top 50:
+    Seq Scan on leaderboard_scores ... (cost=0.00..1234.56 rows=50)
+    Execution Time: 15.234 ms
+  Copy all 4 plans to a text file.
+
+Step 3: Identify slow queries
+  Look for these warning signs:
+    - Seq Scan (full table scan) — should be Index Scan
+    - cost > 10000 — might be missing index
+    - Execution Time > target (e.g., > 30 ms for leaderboard query)
+
+Step 4: Check for missing indexes
+  In Supabase SQL Editor, run:
+    SELECT * FROM pg_indexes WHERE schemaname = 'public';
+  Compare against the 8 required indexes listed in perf-report.md.
+  If any are missing, create a migration.
+
+Step 5: Create a migration for missing indexes
+  In packages/api/src/db/migrations/, create a new migration:
+    0007_add_missing_indexes.sql
+  Example:
+    CREATE INDEX IF NOT EXISTS ix_habit_logs_user_group_date
+    ON habit_logs(user_id, group_id, log_date);
+  Apply the migration to staging via Supabase SQL Editor.
+
+Step 6: Rerun the explain script
+  After indexes are added, rerun step 1.
+  Verify that queries now use Index Scan and execution time improves.
+
+Step 7: Paste results into perf-report.md
+  Open Vibe Code/perf-report.md → "Query plans" section.
+  Under each query (Leaderboard, Feed, Streak, Notifications), paste:
+    - The EXPLAIN ANALYZE output
+    - The execution time
+  Mark green if execution time < target, red if over.
+
+Troubleshooting:
+  - "EXPLAIN: no such index": the index doesn't exist yet; create the migration first
+  - Script timeout: the database is busy or the query is genuinely slow; try again later
+  - Seq Scan still present: the index may not have been created; check with SELECT * FROM pg_indexes
+
+================================================================================
+TASK A15 — Walk end-to-end personas
+================================================================================
+
+Context:
+  The 3 personas (Aryan, Shreya, Rohan) each exercise a different user path.
+  You manually walk through their scripts on iOS, Android, and Chrome.
+  This is the final smoke test before release.
+
+Prerequisites:
+  - Staging environment fully deployed and green
+  - Test devices (iPhone, Android phone)
+  - Chrome desktop
+  - Test accounts prepared (or ability to sign up)
+
+Step 1: Read Vibe Code/e2e-personas.md
+  Open the file and read all 3 scripts.
+  Understand what each persona does.
+
+Step 2: Set up test accounts
+  Create or reset:
+    - aryan_test
+    - shreya_test
+    - rohan_test
+  (Or use your own naming; just be consistent.)
+
+Step 3: Run Aryan script on iOS
+  Device: physical iPhone (or simulator)
+  Script: "Aryan (new user, joiner)"
+  Go through steps 1–10.
+  Record: ☐ pass / ☐ fail
+  If fail, note which step and why.
+
+Step 4: Run Aryan script on Android
+  Device: physical Android phone (or emulator)
+  Same script, same steps.
+  Record: ☐ pass / ☐ fail
+
+Step 5: Run Aryan script on Chrome
+  Device: desktop Chrome
+  Same script, same steps (skip camera on Chrome step 2 if it prompts).
+  Record: ☐ pass / ☐ fail
+
+Step 6: Run Shreya script on iOS
+  Device: iPhone
+  Script: "Shreya (admin, group owner)"
+  Go through steps 1–11.
+  Note: Shreya creates the group and invite that Aryan joins, so Aryan must have run first.
+  Record: ☐ pass / ☐ fail
+
+Step 7: Run Shreya script on Android
+  Device: Android
+  Same script.
+  Record: ☐ pass / ☐ fail
+
+Step 8: Run Shreya script on Chrome
+  Device: Chrome
+  Same script (skip camera-related steps if prompted).
+  Record: ☐ pass / ☐ fail
+
+Step 9: Run Rohan script on iOS
+  Device: iPhone
+  Script: "Rohan (active user, log + react + push)"
+  Steps 1–10.
+  Rohan is a returning user (doesn't sign up), so use an existing account.
+  Record: ☐ pass / ☐ fail
+
+Step 10: Run Rohan script on Android
+  Device: Android
+  Same script.
+  Record: ☐ pass / ☐ fail
+
+Step 11: Run Rohan script on Chrome
+  Device: Chrome
+  Same script.
+  Record: ☐ pass / ☐ fail
+
+Step 12: Fill the sign-off table
+  In e2e-personas.md, fill the table:
+    | Platform | Aryan | Shreya | Rohan |
+    |---|---|---|---|
+    | iOS | ☑ | ☑ | ☑ |
+    | Android | ☑ | ☑ | ☑ |
+    | Chrome | ☑ | ☑ | ☑ |
+  Also fill: Date, Tester name, Build SHA/version.
+  Commit this sign-off to the repo.
+
+Step 13: Investigate failures
+  If any script fails:
+    - Reproduce the failure on that platform
+    - Check logs (Sentry, Railway, browser DevTools)
+    - File a bug ticket with platform + persona + step number
+    - Fix and retest
+
+Troubleshooting:
+  - "Camera won't open on Android": check permissions in app.config.ts; rebuild with EAS
+  - "Push notification didn't arrive": check push token is registered; verify FCM config
+  - "Avatar upload failed": check Supabase avatars bucket RLS policy
+  - "Leaderboard doesn't show": rerun backfill-leaderboard script or wait for next poll
+
+================================================================================
+TASK A16 — GDPR data export and deletion dry-run
+================================================================================
+
+Context:
+  Users can export all their data (GDPR) and delete their account.
+  We need to verify both flows work end-to-end.
+
+Prerequisites:
+  - Staging environment deployed
+  - A test account with some data (logs, groups, etc.)
+  - Access to R2 to verify photo deletion
+
+Step 1: Create a test account
+  Sign up as test_gdpr_user (or similar).
+  Create or join a group.
+  Log some habits (so there's data to export).
+  Take a few proof photos.
+
+Step 2: Trigger export
+  In the app: Profile → Notifications & Privacy (or Privacy screen)
+  Tap "Export my data"
+  The API enqueues a job.
+  You should see "Export requested" and a job ID.
+
+Step 3: Wait for export to be ready
+  The export job runs asynchronously (seconds to minutes).
+  Poll the export status endpoint (or check the UI for "Ready to download").
+  When ready, you should see a download link.
+
+Step 4: Download and inspect the export
+  Click "Download export".
+  A JSON file downloads (e.g., export_abc123.json).
+  Open it and verify:
+    - User data (email, username, display name)
+    - Group memberships (name, role, joined_at)
+    - Habits (name, description, grace_days)
+    - Habit logs (habit_name, log_date, photo_url)
+    - Streaks (group_name, current_streak)
+    - Badges (badge_type, awarded_at)
+  All data should be present and readable.
+
+Step 5: Delete the account
+  Back in Profile → Notifications & Privacy
+  Tap "Delete my account"
+  Confirm the deletion (usually with a checkbox like "I understand this is permanent").
+  The API begins the deletion process:
+    - User soft-deleted
+    - Habit logs anonymised (user_id set to null or a placeholder)
+    - Avatar + proof photos queued for R2 purge
+    - Refresh tokens revoked
+
+Step 6: Verify soft-delete in Supabase
+  Supabase → SQL Editor
+  Run:
+    SELECT id, email, username, deleted_at FROM auth.users WHERE email = 'test_gdpr_user@...';
+  You should see deleted_at IS NOT NULL (or similar soft-delete indicator).
+  Also verify:
+    SELECT * FROM users WHERE id = '<test_user_id>';
+  The record should still exist but marked as deleted.
+
+Step 7: Verify logs anonymised
+  Run:
+    SELECT * FROM habit_logs WHERE user_id IS NULL ORDER BY created_at DESC LIMIT 5;
+  The test user's logs should be in this set (or have user_id = 0 / empty, depending on implementation).
+
+Step 8: Verify R2 photos are queued for purge
+  Supabase → SQL Editor
+  Run:
+    SELECT * FROM purge_queue WHERE user_id = '<test_user_id>';
+  You should see rows for each proof photo.
+  The background worker (if running) will delete these from R2 within 24 hours.
+
+Step 9: Verify refresh tokens revoked
+  The test user's refresh tokens should be invalidated.
+  Try logging in again with their old session — should fail with "token revoked" or similar.
+
+Step 10: Verify account is inaccessible
+  Try signing in with the deleted account's email/password.
+  Should fail with "user not found" or similar (soft-deleted users cannot log in).
+
+Step 11: Document results
+  Note in your testing log:
+    - ✓ Export requested successfully
+    - ✓ Export JSON downloaded and verified
+    - ✓ Account deleted successfully
+    - ✓ User soft-deleted in auth.users
+    - ✓ Habit logs anonymised
+    - ✓ Photos queued for purge
+    - ✓ Refresh tokens revoked
+    - ✓ Account inaccessible after deletion
+
+Troubleshooting:
+  - Export job fails: check API logs for /me/export endpoint errors
+  - Export download returns 404: confirm job status is "ready" and signed URL hasn't expired
+  - Deletion fails: check API logs; common issue is missing DELETE route or RLS policy blocking
+  - Photos still in R2 after 24 hours: manually trigger the purge worker or verify it's running
+
+================================================================================
+TASK A17 — Web push end-to-end test
+================================================================================
+
+Context:
+  After Firebase is configured, we test sending a push to a Chrome client.
+  This verifies the full pipeline: FCM registration → dispatcher → delivery.
+
+Prerequisites:
+  - Firebase project and credentials installed (Task A7)
+  - Chrome browser on desktop
+  - Staging API deployed with FCM HTTP v1 support
+
+Step 1: Open the web app in Chrome
+  Go to https://localhost:3000 (dev) or https://staging-web.rivals.app (production)
+  You should be prompted for notification permission.
+  Grant it.
+
+Step 2: Check token registration
+  Open Chrome DevTools → Console.
+  Look for log: [push-web] "Registered token: ..."
+  Copy the token.
+
+Step 3: Verify token in database
+  Supabase → SQL Editor
+  Run:
+    SELECT * FROM push_tokens WHERE platform = 'web' ORDER BY created_at DESC LIMIT 1;
+  You should see the token from step 2.
+
+Step 4: Trigger a test notification
+  Via the API (if admin endpoint exists):
+    POST /admin/push/test
+    Body: { token: "<token>", title: "Test notification", body: "This is a test" }
+  Or manually via Firebase Console:
+    Cloud Messaging → Send your first message
+    Condition: token = "<your token>"
+    Title & body: as above
+    Target: Firebase Cloud Messaging
+
+Step 5: Receive the notification
+  The Chrome browser (or system notification) should show:
+    "Test notification"
+    "This is a test"
+  Click it.
+  The app should open (or come to focus if already open).
+
+Step 6: Verify analytics fired
+  PostHog dashboard → Events
+  Filter for "notification_opened" event.
+  You should see it recorded.
+  Check the properties (kind, groupId, etc. if present).
+
+Step 7: Test with a real event
+  Instead of the admin endpoint, trigger a real notification:
+    - Complete a habit as another user in the same group
+    - This should trigger a "log" feed event
+    - The original user should receive a push
+  Open the recipient's device/browser.
+  Confirm the push arrives and "notification_opened" is tracked.
+
+Troubleshooting:
+  - No permission prompt in Chrome: check HTTPS is enabled and Firebase config is correct
+  - Token registration fails: check Firebase init (firebase-config.js exists and has correct config)
+  - "onBackgroundMessage" never fires: check service worker (firebase-messaging-sw.js) is registered
+  - Admin endpoint returns 401: confirm the API is running and you have auth credentials
+  - Notification doesn't appear: check browser notifications aren't muted in OS settings
+
+================================================================================
+FINAL CHECKLIST
+================================================================================
+
+Go through this checklist after completing all 17 tasks:
+
+Code changes (should be merged and deployed):
+  ☐ A1–A10 code shipped and passing typecheck/lint/test
+  ☐ Responsive layouts on 3 screens (ResponsiveContainer)
+  ☐ a11y labels on UI primitives
+  ☐ leaderboard_scores RLS test added
+  ☐ Analytics events wired (server + mobile)
+  ☐ All new docs created (security-checklist, perf-report, e2e-personas, etc.)
+
+Dashboard / credential work:
+  ☐ A1: R2 bucket created, API token filled in .env + Railway
+  ☐ A2: Supabase avatars bucket + RLS policies created
+  ☐ A3: DATABASE_URL filled in .env + Railway
+  ☐ A4: pg_cron enabled, challenge jobs scheduled
+  ☐ A5: Leaderboard backfill run
+  ☐ A6: GitHub Actions secrets added (7 total)
+  ☐ A7: Firebase Web Push project + config in app.config.ts + API env
+  ☐ A8: PostHog project + API keys in .env files
+  ☐ A9: Sentry alert rules applied to both projects
+  ☐ A10: Custom domain (rivals.app) configured + /privacy /terms resolving
+  ☐ A11: Apple Developer + Google Play accounts set up
+  ☐ A12: Google OAuth credentials in Google Cloud + Supabase (optional)
+  ☐ A13: k6 load test run, results in perf-report.md
+  ☐ A14: EXPLAIN ANALYZE queries captured, missing indexes added
+  ☐ A15: All 3 personas walked on all 3 platforms (signed off)
+  ☐ A16: GDPR export + delete tested end-to-end
+  ☐ A17: Web push registration + notification delivery tested
+
+Pre-release:
+  ☐ pnpm -w typecheck — all green
+  ☐ pnpm -w lint — all green
+  ☐ pnpm -w test — all green
+  ☐ RLS audit: pnpm --filter @rivals/api exec ts-node src/scripts/audit-rls.ts — zero leaks
+  ☐ Smoke test: pnpm --filter @rivals/api exec ts-node src/scripts/smoke-prod.ts — passes
+  ☐ Final code review + merge to main
+  ☐ All GitHub Actions complete successfully
+  ☐ API deployed to Railway ✓
+  ☐ Web deployed to Cloudflare Pages ✓
+  ☐ Mobile built and submitted to App Store / Play
+
+=================================================================================
+END OF MANUAL TASKS COMPLETE GUIDE
+================================================================================
+
+Last updated: 2026-05-26
+Next step: Execute tasks in order (A1 → A17) or in parallel where independent.
+           See each task's "Prerequisites" to determine dependencies.
+Questions: Refer back to each task's "Troubleshooting" section.

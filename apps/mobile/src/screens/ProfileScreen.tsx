@@ -9,6 +9,8 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { theme } from '../theme';
 import { api } from '../lib/api';
@@ -17,6 +19,7 @@ import { useSessionStore } from '../stores/session';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 
 export function ProfileScreen() {
+  const nav = useNavigation<NativeStackNavigationProp<any>>();
   const { data: user, isLoading } = useCurrentUser();
   const clear = useSessionStore((s) => s.clear);
   const queryClient = useQueryClient();
@@ -79,6 +82,29 @@ export function ProfileScreen() {
         </View>
 
         <Pressable
+          style={[styles.btn, styles.btnSecondary]}
+          onPress={() => nav.navigate('Badges')}
+        >
+          <Text style={styles.btnSecondaryText}>Badges</Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.btn, styles.btnSecondary]}
+          onPress={() => nav.navigate('NotificationPreferences')}
+        >
+          <Text style={styles.btnSecondaryText}>Notification settings</Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.btn, styles.btnSecondary]}
+          onPress={() => nav.navigate('Privacy')}
+          accessibilityRole="button"
+          accessibilityLabel="Privacy and data controls"
+        >
+          <Text style={styles.btnSecondaryText}>Privacy & data</Text>
+        </Pressable>
+
+        <Pressable
           style={[styles.btn, styles.btnDanger]}
           onPress={() => logoutAllMut.mutate()}
           disabled={logoutAllMut.isPending}
@@ -114,6 +140,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   btnPrimary: { backgroundColor: theme.colors.accent },
+  btnSecondary: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    marginTop: theme.spacing.md,
+  },
+  btnSecondaryText: { ...theme.typography.heading, color: theme.colors.text },
   btnDanger: { backgroundColor: theme.colors.danger, marginTop: theme.spacing.lg },
   btnText: { ...theme.typography.heading, color: '#0B1220' },
 });

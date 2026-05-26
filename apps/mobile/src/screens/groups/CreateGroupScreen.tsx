@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  View,
   Text,
   TextInput,
   StyleSheet,
@@ -8,13 +7,20 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Image,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import * as ImagePicker from 'expo-image-picker';
+import { createClient } from '@supabase/supabase-js';
+import Constants from 'expo-constants';
 import { theme } from '../../theme';
 import { useCreateGroup } from '../../hooks/useGroups';
 import type { GroupsStackParamList } from '../../navigation/GroupsStack';
+import { useSessionStore } from '../../stores/session';
 
 type Nav = NativeStackNavigationProp<GroupsStackParamList, 'CreateGroup'>;
 
@@ -26,14 +32,69 @@ function guessTz(): string {
   }
 }
 
+async function uploadAvatar(localUri: string, accessToken: string): Promise<string> {
+  const extra = Constants.expoConfig?.extra as
+    | { supabaseUrl?: string; supabaseAnonKey?: string }
+    | undefined;
+  if (!extra?.supabaseUrl || !extra.supabaseAnonKey) {
+    throw new Error('Supabase not configured for avatar upload');
+  }
+  const supabase = createClient(extra.supabaseUrl, extra.supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    auth: { persistSession: false },
+  });
+
+  const res = await fetch(localUri);
+  const blob = await res.blob();
+  const ext = localUri.split('.').pop()?.toLowerCase() ?? 'jpg';
+  const key = `groups/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const { error: upErr } = await supabase.storage.from('avatars').upload(key, blob, {
+    contentType: blob.type || 'image/jpeg',
+    upsert: false,
+  });
+  if (upErr) throw new Error(upErr.message);
+  const { data } = supabase.storage.from('avatars').getPublicUrl(key);
+  return data.publicUrl;
+}
+
 export function CreateGroupScreen() {
   const nav = useNavigation<Nav>();
+  const accessToken = useSessionStore((s) => s.accessToken);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [tz, setTz] = useState(guessTz());
   const [error, setError] = useState<string | null>(null);
   const mut = useCreateGroup();
+
+  const pickAvatar = async () => {
+    if (!accessToken) {
+      Alert.alert('Sign in required', 'Please sign in again before uploading an avatar.');
+      return;
+    }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Photo library access is required to pick an avatar.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.85,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+    if (result.canceled || !result.assets[0]?.uri) return;
+    try {
+      setAvatarUploading(true);
+      const publicUrl = await uploadAvatar(result.assets[0].uri, accessToken);
+      setAvatarUrl(publicUrl);
+    } catch (e) {
+      Alert.alert('Upload failed', (e as Error).message);
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -68,15 +129,22 @@ export function CreateGroupScreen() {
             maxLength={500}
           />
 
-          <Text style={styles.label}>Avatar URL (optional)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="https://..."
-            placeholderTextColor={theme.colors.textMuted}
-            value={avatarUrl}
-            onChangeText={setAvatarUrl}
-            autoCapitalize="none"
-          />
+          <Text style={styles.label}>Avatar (optional)</Text>
+          <Pressable
+            onPress={pickAvatar}
+            style={styles.avatarPicker}
+            accessibilityRole="button"
+            accessibilityLabel="Pick a group avatar image"
+            disabled={avatarUploading}
+          >
+            {avatarUploading ? (
+              <ActivityIndicator color={theme.colors.accent} />
+            ) : avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarPickerText}>Tap to upload</Text>
+            )}
+          </Pressable>
 
           <Text style={styles.label}>Reference timezone</Text>
           <TextInput
@@ -151,4 +219,19 @@ const styles = StyleSheet.create({
   btnPrimary: { backgroundColor: theme.colors.accent },
   btnText: { ...theme.typography.heading, color: '#0B1220' },
   error: { color: theme.colors.danger, ...theme.typography.caption, marginTop: theme.spacing.sm },
+  avatarPicker: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
+    marginTop: theme.spacing.xs,
+    overflow: 'hidden',
+  },
+  avatarImage: { width: '100%', height: '100%' },
+  avatarPickerText: { ...theme.typography.caption, color: theme.colors.textMuted },
 });

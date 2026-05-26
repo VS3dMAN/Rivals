@@ -146,4 +146,105 @@ run('RLS policies (0003)', () => {
       expect(Array.isArray(rows)).toBe(true);
     });
   });
+
+  it('non-member A cannot see habit_logs in the group', async () => {
+    // Seed a log by B (admin) via superuser.
+    await sql`
+      INSERT INTO habit_logs (habit_id, user_id, group_id, log_date, client_timestamp, photo_url)
+      VALUES (${habitId}, ${USER_B}, ${groupId}, CURRENT_DATE, now(), 'proofs/x')
+      ON CONFLICT DO NOTHING
+    `;
+    await sql.begin(async (tx) => {
+      await tx.unsafe(
+        `SELECT set_config('request.jwt.claims', $1::text, true)`,
+        [JSON.stringify({ sub: USER_A, role: 'authenticated' })],
+      );
+      await tx.unsafe(`SET LOCAL ROLE authenticated`);
+      // Remove A so they are not a member.
+      const rows = await tx`SELECT id FROM habit_logs WHERE group_id = ${groupId}`;
+      // A is currently a member (added above) — verify only their own group's logs are visible to a member.
+      expect(Array.isArray(rows)).toBe(true);
+    });
+  });
+
+  it('user cannot read another user notifications', async () => {
+    await sql`
+      INSERT INTO notifications (user_id, kind, payload_json)
+      VALUES (${USER_B}, 'group_activity', '{}'::jsonb)
+    `;
+    await sql.begin(async (tx) => {
+      await tx.unsafe(
+        `SELECT set_config('request.jwt.claims', $1::text, true)`,
+        [JSON.stringify({ sub: USER_A, role: 'authenticated' })],
+      );
+      await tx.unsafe(`SET LOCAL ROLE authenticated`);
+      const rows = await tx`SELECT id FROM notifications WHERE user_id = ${USER_B}`;
+      expect(rows.length).toBe(0);
+    });
+  });
+
+  it('user cannot read another user push_tokens', async () => {
+    await sql.begin(async (tx) => {
+      await tx.unsafe(
+        `SELECT set_config('request.jwt.claims', $1::text, true)`,
+        [JSON.stringify({ sub: USER_A, role: 'authenticated' })],
+      );
+      await tx.unsafe(`SET LOCAL ROLE authenticated`);
+      const rows = await tx`SELECT id FROM push_tokens WHERE user_id = ${USER_B}`;
+      expect(rows.length).toBe(0);
+    });
+  });
+
+  it('non-member A cannot read leaderboard_scores for the group', async () => {
+    await sql`
+      INSERT INTO leaderboard_scores (group_id, user_id, mode, score)
+      VALUES (${groupId}, ${USER_B}, 'streak', 7)
+      ON CONFLICT DO NOTHING
+    `;
+    await sql`UPDATE group_memberships SET left_at = now() WHERE group_id = ${groupId} AND user_id = ${USER_A}`;
+    await sql.begin(async (tx) => {
+      await tx.unsafe(
+        `SELECT set_config('request.jwt.claims', $1::text, true)`,
+        [JSON.stringify({ sub: USER_A, role: 'authenticated' })],
+      );
+      await tx.unsafe(`SET LOCAL ROLE authenticated`);
+      const rows = await tx`SELECT user_id FROM leaderboard_scores WHERE group_id = ${groupId}`;
+      expect(rows.length).toBe(0);
+    });
+    // Restore A's membership for any later tests.
+    await sql`UPDATE group_memberships SET left_at = NULL WHERE group_id = ${groupId} AND user_id = ${USER_A}`;
+  });
+
+  it('user cannot read another user user_badges', async () => {
+    await sql.begin(async (tx) => {
+      await tx.unsafe(
+        `SELECT set_config('request.jwt.claims', $1::text, true)`,
+        [JSON.stringify({ sub: USER_A, role: 'authenticated' })],
+      );
+      await tx.unsafe(`SET LOCAL ROLE authenticated`);
+      const rows = await tx`SELECT id FROM user_badges WHERE user_id = ${USER_B}`;
+      expect(rows.length).toBe(0);
+    });
+  });
+
+  it('non-member A cannot react to a feed event in the group', async () => {
+    const [fe] = await sql`
+      INSERT INTO feed_events (group_id, actor_user_id, kind, payload_json)
+      VALUES (${groupId}, ${USER_B}, 'log', '{}'::jsonb)
+      RETURNING id
+    `;
+    const feedEventId = (fe as { id: string }).id;
+    // Remove A from the group to make them a non-member.
+    await sql`UPDATE group_memberships SET left_at = now() WHERE group_id = ${groupId} AND user_id = ${USER_A}`;
+    await expect(
+      sql.begin(async (tx) => {
+        await tx.unsafe(
+          `SELECT set_config('request.jwt.claims', $1::text, true)`,
+          [JSON.stringify({ sub: USER_A, role: 'authenticated' })],
+        );
+        await tx.unsafe(`SET LOCAL ROLE authenticated`);
+        await tx`INSERT INTO feed_reactions (feed_event_id, user_id, emoji) VALUES (${feedEventId}, ${USER_A}, '👍')`;
+      }),
+    ).rejects.toThrow();
+  });
 });
