@@ -13,6 +13,7 @@ import usersRoutes from './modules/users/routes';
 import authRoutes from './modules/auth/routes';
 import groupsRoutes from './modules/groups/routes';
 import habitsRoutes from './modules/habits/routes';
+import personalRoutes from './modules/personal/routes';
 import logsRoutes from './modules/logs/routes';
 import leaderboardRoutes from './modules/leaderboard/routes';
 import feedRoutes from './modules/feed/routes';
@@ -94,6 +95,7 @@ export async function buildServer(opts: BuildOptions = {}): Promise<FastifyInsta
   await app.register(authRoutes, { db, supabase });
   await app.register(groupsRoutes, { db });
   await app.register(habitsRoutes, { db });
+  await app.register(personalRoutes, { db });
   await app.register(logsRoutes, { db, r2 });
   await app.register(leaderboardRoutes, { db });
   await app.register(feedRoutes, { db, r2 });

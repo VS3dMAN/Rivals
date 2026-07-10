@@ -167,6 +167,29 @@ Every entity below maps directly to a Drizzle table. All tables have `created_at
 | deleted_at         | timestamptz | nullable                           | Same-day re-submission soft-deletes prior                     |
 |                    |             | UNIQUE(habit_id, user_id, log_date) WHERE deleted_at IS NULL |                                                               |
 
+**personal_habits** *(added 2026-07 — PRD §2.1 private personal section)*
+| Field           | Type        | Constraints                 | Notes                                               |
+|-----------------|-------------|-----------------------------|-----------------------------------------------------|
+| id              | uuid PK     |                             |                                                     |
+| user_id         | uuid FK→users.id | not null               | Owner; private to this user                         |
+| name            | text        | not null, 1-60 chars        |                                                     |
+| description     | text        | nullable                    |                                                     |
+| grace_days      | smallint    | 0 ≤ x ≤ 2, default 0        | Same grace semantics as group habits                |
+| is_active       | boolean     | default true                | Pause keeps history                                 |
+| created_at      | timestamptz |                             |                                                     |
+
+**personal_habit_logs** *(no proof photo — tap-to-complete)*
+| Field              | Type        | Constraints                        | Notes                                    |
+|--------------------|-------------|------------------------------------|------------------------------------------|
+| id                 | uuid PK     |                                    |                                          |
+| personal_habit_id  | uuid FK     | not null, cascade delete           |                                          |
+| user_id            | uuid FK     | not null                           |                                          |
+| log_date           | date        | not null                           | User-local calendar date                 |
+| created_at         | timestamptz | default now()                      |                                          |
+|                    |             | UNIQUE(personal_habit_id, log_date)| One completion per day; undo = hard delete |
+
+Streaks for personal habits are computed on read (`modules/personal/streak.ts`), not stored — history volume is one row per day per habit. RLS: owner-only SELECT on both tables; API service role writes.
+
 **streaks**
 | Field              | Type        | Constraints                       | Notes                               |
 |--------------------|-------------|-----------------------------------|-------------------------------------|
@@ -307,6 +330,13 @@ All routes return JSON; all authenticated routes require `Authorization: Bearer 
 | POST   | /groups/:id/habits                         | Create habit                                      | Yes (admin)   |
 | PATCH  | /habits/:id                                | Edit or deactivate habit                          | Yes (admin)   |
 | GET    | /groups/:id/habits/today                   | Today's habit cards for current user              | Yes (member)  |
+| GET    | /me/habits                                 | Personal habits with today status + streaks       | Yes           |
+| POST   | /me/habits                                 | Create personal habit                             | Yes           |
+| PATCH  | /me/habits/:id                             | Edit / pause / resume personal habit              | Yes (owner)   |
+| DELETE | /me/habits/:id                             | Delete personal habit + history                   | Yes (owner)   |
+| POST   | /me/habits/:id/complete                    | Mark done today (idempotent, no photo)            | Yes (owner)   |
+| DELETE | /me/habits/:id/complete                    | Undo today's completion                           | Yes (owner)   |
+| GET    | /me/habits/:id/stats                       | Streaks, totals, 180-day calendar                 | Yes (owner)   |
 | POST   | /logs/upload-url                           | Request R2 presigned PUT + upload_id              | Yes (member)  |
 | POST   | /logs                                      | Confirm upload, validate timestamps, write log    | Yes (member)  |
 | DELETE | /logs/:id                                  | Same-day delete (soft)                            | Yes (owner)   |

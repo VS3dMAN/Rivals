@@ -8,7 +8,12 @@ export const linking: LinkingOptions<ReturnType<typeof Object>> = {
   prefixes: [Linking.createURL('/'), 'rivals://', 'https://rivals.app'],
   config: {
     screens: {
-      DashboardTab: 'today',
+      MyHabitsTab: {
+        screens: {
+          MyHabits: 'habits',
+          PersonalHabitDetail: 'habits/:habitId',
+        },
+      },
       GroupsTab: {
         screens: {
           GroupsList: 'groups',

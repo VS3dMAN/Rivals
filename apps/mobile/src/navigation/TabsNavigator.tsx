@@ -2,13 +2,13 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Text } from 'react-native';
 import { theme } from '../theme';
-import { DashboardScreen } from '../screens/DashboardScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { NotificationPreferencesScreen } from '../screens/NotificationPreferencesScreen';
 import { BadgesScreen } from '../screens/BadgesScreen';
 import { PrivacyScreen } from '../screens/PrivacyScreen';
 import { GroupsStack } from './GroupsStack';
+import { PersonalStack } from './PersonalStack';
 import { useUnreadCount } from '../hooks/useNotifications';
 
 const Tab = createBottomTabNavigator();
@@ -30,7 +30,6 @@ function makeStack(component: React.ComponentType, title: string) {
   };
 }
 
-const DashboardStack = makeStack(DashboardScreen, 'Today');
 const NotificationsStack = makeStack(NotificationsScreen, 'Notifications');
 
 const ProfileStackNav = createNativeStackNavigator();
@@ -86,9 +85,9 @@ export function TabsNavigator() {
       }}
     >
       <Tab.Screen
-        name="DashboardTab"
-        component={DashboardStack}
-        options={{ title: 'Today', tabBarIcon: tabIcon('T') }}
+        name="MyHabitsTab"
+        component={PersonalStack}
+        options={{ title: 'My Habits', tabBarIcon: tabIcon('H') }}
       />
       <Tab.Screen
         name="GroupsTab"
