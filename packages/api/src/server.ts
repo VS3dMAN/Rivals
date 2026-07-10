@@ -90,7 +90,7 @@ export async function buildServer(opts: BuildOptions = {}): Promise<FastifyInsta
   await app.register(errorsPlugin);
   await app.register(authPlugin, { jwtSecret: env.SUPABASE_JWT_SECRET });
 
-  await app.register(healthRoutes);
+  await app.register(healthRoutes, { db });
   await app.register(usersRoutes, { db });
   await app.register(authRoutes, { db, supabase });
   await app.register(groupsRoutes, { db });

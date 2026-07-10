@@ -39,7 +39,12 @@ Everything not listed here is done (see "Already handled" at the bottom).
    `EXPO_PUBLIC_POSTHOG_API_KEY` (mobile/web) and `POSTHOG_API_KEY` (API).
 
 7. **Uptime Robot** (guide Task A7) — HTTP monitor on the Render `/health`
-   URL every 5 min so the free instance doesn't sleep.
+   URL every 5 min. This now serves double duty: `/health` runs a `SELECT 1`
+   on every hit, so the pings keep BOTH the Render instance awake AND the
+   Supabase free-tier DB warm (Supabase auto-pauses after ~7 days of no DB
+   activity — this is what killed the project before). `/health` still
+   returns 200 even if the DB is briefly unreachable; the JSON `db` field
+   reports `ok` / `error` / `unconfigured` for real status.
 
 8. **GitHub Actions secrets + variables** (guide Task A6, Railway parts now
    obsolete). Secrets: `EXPO_PUBLIC_*`, `CLOUDFLARE_API_TOKEN`,
