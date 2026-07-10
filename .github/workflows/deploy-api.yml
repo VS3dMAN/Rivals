@@ -1,5 +1,10 @@
 name: Deploy API (staging)
 
+# Render auto-deploys from GitHub when the Blueprint (render.yaml) is set up,
+# so this workflow only (1) sanity-builds the API and (2) pings the optional
+# Render deploy hook for setups without the GitHub integration. The hook step
+# is skipped unless the RENDER_DEPLOY_HOOK_CONFIGURED repo variable is 'true'.
+
 on:
   push:
     branches: [main]
@@ -31,10 +36,8 @@ jobs:
       - name: Build API
         run: pnpm --filter @rivals/api build
 
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      - name: Deploy to Railway
+      - name: Trigger Render deploy hook
+        if: ${{ vars.RENDER_DEPLOY_HOOK_CONFIGURED == 'true' }}
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --service rivals-api --detach
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"

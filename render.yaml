@@ -1,0 +1,46 @@
+# Render Blueprint for the Rivals API.
+#
+# One-time setup: https://dashboard.render.com → New → Blueprint → pick this
+# repo. Render reads this file, creates the service, and then auto-deploys on
+# every push to main. Env vars marked `sync: false` must be pasted once in the
+# dashboard (values live in the root .env / plans/manual-tasks-complete-guide.txt).
+
+services:
+  - type: web
+    name: rivals-api
+    runtime: node
+    plan: free
+    region: singapore # closest to Supabase ap-south-1 (Mumbai)
+    buildCommand: corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install --frozen-lockfile && pnpm --filter @rivals/api build
+    startCommand: node packages/api/dist/index.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_PORT
+        value: "10000" # Render routes traffic to $PORT (10000); the API reads API_PORT
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        value: rivals-proofs
+      - key: R2_PUBLIC_BASE_URL
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
