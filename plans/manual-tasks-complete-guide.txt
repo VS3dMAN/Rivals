@@ -8,7 +8,8 @@ Purpose: Step-by-step instructions for ALL dashboard/credential work needed to
 Audience: The developer who will execute these tasks.
 
 Note: This supplements plans/manual-tasks-01-to-04.txt (which covers phases 01–04).
-      This guide covers the NEW manual work from the A6–A10 implementation sprint.
+      This guide covers the NEW manual work from the A1–A18 implementation tasks.
+      Updated 2026-05-26: Switched from Railway to Render + Uptime Robot for cost optimization.
 
 ================================================================================
 SECTION A: CLOUDFLARE R2 (PROOF PHOTOS)
@@ -73,15 +74,16 @@ Step 5: Fill .env locally
     R2_BUCKET=rivals-proofs
   Save the file.
 
-Step 6: Add to Railway staging environment
-  Go to https://railway.app → your project → API service → Variables
-  Add each of the 5 variables above.
-  Railway redeploys automatically.
-  Wait for green health check.
+Step 6: Add to Render environment
+  Go to https://render.com → Dashboard → select your API service
+  Go to Environment → Environment variables
+  Add each of the 5 variables above (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, etc.).
+  Render redeploys automatically when you add variables.
+  Wait for the deploy to complete (status shows "Live").
 
 Step 7: Verify
-  Once Railway is green:
-  curl https://your-api-url.up.railway.app/health
+  Once Render shows "Live":
+  curl https://your-api-url.onrender.com/health
   Should return 200.
   In the Rivals app, complete a habit with a photo.
   Upload should succeed end-to-end.
@@ -174,22 +176,23 @@ Step 1: Get connection string
   COPY the entire string.
 
 Step 2: Choose the right port
-  For Fastify on Railway: use Session mode (port 5432).
-  (PgBouncer / Transaction mode is port 6543 — only if Railway uses PgBouncer.)
+  For Fastify on Render: use Session mode (port 5432).
+  (Supabase Connection Pooler is optional for high-concurrency scenarios.)
 
 Step 3: Fill .env locally
   Open packages/api/.env
   Replace the DATABASE_URL line with the full URI you copied.
   Save.
 
-Step 4: Add to Railway
-  Railway → API service → Variables
-  Add or update DATABASE_URL with the same value.
-  Railway redeploys.
+Step 4: Add to Render
+  Go to https://render.com → Dashboard → select your API service
+  Go to Environment → Environment variables
+  Add or update DATABASE_URL with the same value you copied.
+  Render redeploys automatically.
 
 Step 5: Verify
-  After Railway is green:
-  curl https://your-api-url.up.railway.app/health
+  After Render shows "Live":
+  curl https://your-api-url.onrender.com/health
   Should return 200 with connection details.
 
 Troubleshooting:
@@ -265,13 +268,13 @@ Context:
   This script retroactively computes scores for all existing (user, group) pairs.
 
 Prerequisites:
-  - API code (task 04 or later) is deployed to Railway
+  - API code (task 04 or later) is deployed to Render
   - DATABASE_URL is set locally (from A3 above)
   - You have git access to Rivals repo
 
 Step 1: Confirm task 04 is deployed
-  Go to Railway → API service → Deployments
-  Confirm the task-04 commit or later is green/live.
+  Go to Render → Dashboard → select your API service → Deployments
+  Confirm a recent deployment is "Live" (green status).
 
 Step 2: Set DATABASE_URL locally
   Open your shell (terminal / PowerShell).
@@ -308,9 +311,11 @@ TASK A6 — Add GitHub Actions secrets
 ================================================================================
 
 Context:
-  CI/CD pipelines run in GitHub and need credentials (Railway token, Cloudflare,
-  Supabase, Firebase, PostHog, Sentry DSN, etc.).
+  CI/CD pipelines run in GitHub and need credentials (Cloudflare, Supabase,
+  Firebase, PostHog, Sentry DSN, etc.).
   All are stored as repository secrets.
+  NOTE: With Render (not Railway), API deployment is manual or webhook-based,
+  not via GitHub Actions CI/CD.
 
 Prerequisites:
   - GitHub repository access
@@ -320,15 +325,7 @@ Step 1: Navigate to secrets
   Go to your GitHub repo → Settings → Secrets and variables → Actions
   Click "New repository secret" for each item below.
 
-Step 2: Add RAILWAY_TOKEN
-  Where to get it:
-    - https://railway.app → account icon top right → Account Settings
-    - Left sidebar: Tokens
-    - "New Token" → name it "github-actions"
-    - Copy the token value (shown once only)
-  Add as secret: RAILWAY_TOKEN = <the token>
-
-Step 3: Add CLOUDFLARE_API_TOKEN
+Step 2: Add CLOUDFLARE_API_TOKEN
   Where to get it:
     - https://dash.cloudflare.com → account name top right → My Profile
     - Left sidebar: API Tokens
@@ -338,40 +335,39 @@ Step 3: Add CLOUDFLARE_API_TOKEN
     - Copy the token
   Add as secret: CLOUDFLARE_API_TOKEN = <the token>
 
-Step 4: Add CLOUDFLARE_ACCOUNT_ID
+Step 3: Add CLOUDFLARE_ACCOUNT_ID
   In the Cloudflare dashboard, look at the URL:
     https://dash.cloudflare.com/<ACCOUNT_ID>/...
   Or go to any Cloudflare page → right sidebar, "Account ID" is shown.
   Copy it.
   Add as secret: CLOUDFLARE_ACCOUNT_ID = <the ID>
 
-Step 5: Add EXPO_PUBLIC_API_URL
-  This is the public URL of your deployed API on Railway.
-  Go to Railway → API service → Settings
-  Under Domains, copy the auto-generated URL (looks like https://rivals-api-xxx.up.railway.app)
+Step 4: Add EXPO_PUBLIC_API_URL
+  This is the public URL of your deployed API on Render.
+  Go to https://render.com → Dashboard → select your API service → copy the URL from "Service URL" section
+  (looks like https://rivals-api.onrender.com)
   Add as secret: EXPO_PUBLIC_API_URL = <the URL>
 
-Step 6: Add EXPO_PUBLIC_SUPABASE_URL
+Step 5: Add EXPO_PUBLIC_SUPABASE_URL
   Supabase dashboard → your project → Settings → API
   Under "Project URL", copy the full URL (https://xxxx.supabase.co)
   Add as secret: EXPO_PUBLIC_SUPABASE_URL = <the URL>
 
-Step 7: Add EXPO_PUBLIC_SUPABASE_ANON_KEY
+Step 6: Add EXPO_PUBLIC_SUPABASE_ANON_KEY
   Same page (Supabase Settings → API).
   Under "Project API keys", find the "anon public" key (long JWT string starting with "eyJ").
   Copy it.
   Add as secret: EXPO_PUBLIC_SUPABASE_ANON_KEY = <the key>
 
-Step 8: Add EXPO_PUBLIC_SENTRY_DSN (optional but recommended)
+Step 7: Add EXPO_PUBLIC_SENTRY_DSN (optional but recommended)
   Where to get it:
     - https://sentry.io → Projects → select or create "rivals-mobile"
     - Go to Settings → Projects → the project → Client Keys (DSN)
     - Copy the DSN (looks like https://abc123@o123456.ingest.sentry.io/789)
   Add as secret: EXPO_PUBLIC_SENTRY_DSN = <the DSN>
 
-Step 9: Verify all secrets are registered
+Step 8: Verify all secrets are registered
   Back in Settings → Secrets → Actions, you should see:
-    ☑ RAILWAY_TOKEN
     ☑ CLOUDFLARE_API_TOKEN
     ☑ CLOUDFLARE_ACCOUNT_ID
     ☑ EXPO_PUBLIC_API_URL
@@ -380,7 +376,7 @@ Step 9: Verify all secrets are registered
     ☑ EXPO_PUBLIC_SENTRY_DSN
   (Names are shown; values are hidden.)
 
-Step 10: Test with a push
+Step 9: Test with a push
   Make a trivial commit (e.g., add a blank line to README).
   git push to main.
   Go to GitHub Actions tab.
@@ -388,13 +384,83 @@ Step 10: Test with a push
   If green, secrets are wired.
   If red, check the logs — most common: Supabase/API URL typo.
 
+Step 10: Set up Render deployment (manual or webhook)
+  Option A (Manual): After pushing code, manually trigger a deployment:
+    - Go to https://render.com → Dashboard → API service → Manual Deploy → Deploy latest commit
+  Option B (Webhook): Connect Render to your GitHub repo:
+    - Go to Render → API service → Settings → Deploy hook
+    - Copy the webhook URL
+    - Go to GitHub → your repo → Settings → Webhooks
+    - "Add webhook" → URL = Render webhook, events = Pushes
+    - Now every push to main triggers a Render deploy
+  Choose whichever is more convenient for your workflow.
+
 Troubleshooting:
   - "Repository secrets error": confirm you have admin permissions
   - CI fails with "secret not found": re-type the secret name (case-sensitive)
   - API auth fails in CI: re-check the EXPO_PUBLIC_SUPABASE_ANON_KEY value
+  - Render deployment fails: check Render logs (Render → API service → Logs tab)
 
 ================================================================================
-TASK A7 — Set up Firebase Web Push
+TASK A7 — Set up Uptime Robot (keep Render alive)
+================================================================================
+
+Context:
+  Render's free tier spins down after 15 minutes of inactivity.
+  Uptime Robot is a free service that pings your API every 5 minutes,
+  keeping it awake 24/7. Without this, the first user request after
+  inactivity will experience a 60-120 second cold start.
+
+Prerequisites:
+  - Uptime Robot account (free, no credit card required)
+  - Render API URL (from previous tasks)
+
+Step 1: Create Uptime Robot account
+  Go to https://uptimerobot.com
+  "Sign up" → email + password
+  Verify your email (link sent to inbox)
+
+Step 2: Create a monitor
+  Uptime Robot Dashboard → "Add New Monitor"
+  Fill:
+    Monitor Type: HTTP(s)
+    Monitor Friendly Name: "Rivals API Keep-Alive"
+    URL: https://your-api.onrender.com/health
+    Monitoring Interval: 5 minutes
+    (5-minute interval is perfect for keeping Render alive — requires the service
+     to respond every 15 minutes, and Uptime Robot pings every 5 min.)
+  Click "Create Monitor"
+
+Step 3: Verify the monitor is working
+  Uptime Robot Dashboard should show:
+    Status: Up (green checkmark)
+    Last Checked: just now
+  If "Down" or "Pending", wait a few seconds and refresh.
+  If it stays "Down", double-check the API URL is correct.
+
+Step 4: (Optional) Set up Slack alert
+  If you want to be notified if the API ever goes down:
+    Uptime Robot → Settings → Alert Contacts
+    "Add" → Slack
+    Authorize Uptime Robot in Slack
+    Choose a Slack channel (#rivals-oncall)
+    In your monitor, check "Send notifications to: Slack"
+
+Step 5: Confirm the setup
+  Your API is now continuously pinged by Uptime Robot every 5 minutes.
+  This keeps it awake on Render's free tier.
+  Real user requests will get instant responses (no cold starts, as long as
+  the Uptime Robot pings keep the service warm).
+
+Troubleshooting:
+  - Monitor shows "Down": confirm API is running (Render → Logs), and URL is correct
+  - Not receiving Slack alerts: re-check Slack workspace authorization
+  - API still slow: if response time > 60 sec, it may be a cold start happening before Uptime Robot pings it
+    (e.g., if your app is idle for more than 15 mins, first user hits a cold start, then Uptime Robot
+     keeps it warm afterward). This is acceptable per your requirements.
+
+================================================================================
+TASK A8 — Set up Firebase Web Push
 ================================================================================
 
 Context:
@@ -460,7 +526,7 @@ Step 6: Fill API .env
   Open packages/api/.env
   Add:
     FIREBASE_SERVICE_ACCOUNT_JSON=<paste the entire JSON object from step 5>
-  (Or set it as a Railway environment variable if you prefer not to paste in .env.)
+  (Or set it as a Render environment variable if you prefer not to paste in .env.)
 
 Step 7: Build the service worker config
   The web app's service worker (apps/mobile/public/firebase-messaging-sw.js)
@@ -479,8 +545,8 @@ Step 7: Build the service worker config
     EOF
   (Cloudflare Pages build script or GitHub Actions should do this.)
 
-Step 8: Add env vars to Railway (API) and GitHub Secrets (mobile build)
-  Railway → API service → Variables:
+Step 8: Add env vars to Render (API) and GitHub Secrets (mobile build)
+  Render → API service → Environment → Environment variables:
     FIREBASE_SERVICE_ACCOUNT_JSON=<the JSON>
   GitHub Secrets (for mobile build):
     EXPO_PUBLIC_FIREBASE_API_KEY=...
@@ -512,7 +578,7 @@ Troubleshooting:
   - Token registration 401: confirm EXPO_PUBLIC_SUPABASE_ANON_KEY is correct
 
 ================================================================================
-TASK A8 — Set up PostHog analytics
+TASK A9 — Set up PostHog analytics
 ================================================================================
 
 Context:
@@ -555,7 +621,7 @@ Step 6: Add to GitHub Secrets (for CI/CD mobile builds)
     EXPO_PUBLIC_POSTHOG_API_KEY=phc_abc123...
 
 Step 7: Deploy and test
-  Deploy API to Railway.
+  Deploy API to Render (manually or via webhook).
   Build and deploy mobile app.
   In the app, perform an action (sign up, complete a habit, navigate a screen).
   Go to PostHog dashboard → Events.
@@ -577,7 +643,7 @@ Troubleshooting:
   - "Network error": confirm the PostHog host URL is reachable from your app
 
 ================================================================================
-TASK A9 — Set up Sentry alert rules
+TASK A10 — Set up Sentry alert rules
 ================================================================================
 
 Context:
@@ -647,7 +713,7 @@ Troubleshooting:
   - "Condition not met": trace through the rule logic — is the error rate actually > 2%?
 
 ================================================================================
-TASK A10 — Set up custom domain (rivals.app)
+TASK A11 — Set up custom domain (rivals.app)
 ================================================================================
 
 Context:
@@ -710,7 +776,7 @@ Troubleshooting:
   - /privacy returns 404: confirm privacy.html exists in apps/mobile/public/ and is deployed
 
 ================================================================================
-TASK A11 — App Store / Play Console accounts
+TASK A12 — App Store / Play Console accounts
 ================================================================================
 
 Context:
@@ -820,7 +886,7 @@ Troubleshooting:
   - "Bundle ID already exists": choose a different bundle ID
 
 ================================================================================
-TASK A12 — Google OAuth (optional)
+TASK A13 — Google OAuth (optional)
 ================================================================================
 
 Context:
@@ -866,7 +932,7 @@ Troubleshooting:
   - Deep link not firing: confirm app.config.ts has the scheme; you may need to rebuild the Expo app
 
 ================================================================================
-TASK A13 — k6 load testing
+TASK A14 — k6 load testing
 ================================================================================
 
 Context:
@@ -893,7 +959,7 @@ Step 2: Prepare the test script
 
 Step 3: Set env vars
   Shell:
-    export API_URL=https://your-staging-api.up.railway.app
+    export API_URL=https://your-staging-api.onrender.com
     export API_TOKEN=<a valid JWT from a test account>
   (Or pass them as k6 env flags: -e API_URL=... -e API_TOKEN=...)
 
@@ -929,7 +995,7 @@ Step 6: Paste into perf-report.md
 
 Step 7: Investigate failures (if any)
   If P95 > 90s or error rate > 2%:
-    - Check Railway API logs for errors
+    - Check Render API logs for errors (Render → API service → Logs)
     - Check R2 status page
     - Look for slow queries in Supabase logs
     - File a ticket to optimize the slow path
@@ -939,10 +1005,10 @@ Troubleshooting:
   - "Connection refused": confirm API_URL is correct and API is running
   - "401 Unauthorized": confirm API_TOKEN is a valid JWT
   - Spike in P95 midway through: this is expected as ramp-up happens; focus on steady-state numbers
-  - High error rate: check API logs for the root cause (500 errors, rate limits, R2 timeouts, etc.)
+  - High error rate: check Render API logs (Render → API service → Logs tab) for the root cause
 
 ================================================================================
-TASK A14 — Capture EXPLAIN ANALYZE queries
+TASK A15 — Capture EXPLAIN ANALYZE queries
 ================================================================================
 
 Context:
@@ -1005,7 +1071,7 @@ Troubleshooting:
   - Seq Scan still present: the index may not have been created; check with SELECT * FROM pg_indexes
 
 ================================================================================
-TASK A15 — Walk end-to-end personas
+TASK A16 — Walk end-to-end personas
 ================================================================================
 
 Context:
@@ -1094,7 +1160,7 @@ Step 12: Fill the sign-off table
 Step 13: Investigate failures
   If any script fails:
     - Reproduce the failure on that platform
-    - Check logs (Sentry, Railway, browser DevTools)
+    - Check logs (Sentry, Render, browser DevTools)
     - File a bug ticket with platform + persona + step number
     - Fix and retest
 
@@ -1105,7 +1171,7 @@ Troubleshooting:
   - "Leaderboard doesn't show": rerun backfill-leaderboard script or wait for next poll
 
 ================================================================================
-TASK A16 — GDPR data export and deletion dry-run
+TASK A17 — GDPR data export and deletion dry-run
 ================================================================================
 
 Context:
@@ -1203,7 +1269,7 @@ Troubleshooting:
   - Photos still in R2 after 24 hours: manually trigger the purge worker or verify it's running
 
 ================================================================================
-TASK A17 — Web push end-to-end test
+TASK A18 — Web push end-to-end test
 ================================================================================
 
 Context:
@@ -1284,23 +1350,24 @@ Code changes (should be merged and deployed):
   ☐ All new docs created (security-checklist, perf-report, e2e-personas, etc.)
 
 Dashboard / credential work:
-  ☐ A1: R2 bucket created, API token filled in .env + Railway
+  ☐ A1: R2 bucket created, API token filled in .env + Render
   ☐ A2: Supabase avatars bucket + RLS policies created
-  ☐ A3: DATABASE_URL filled in .env + Railway
+  ☐ A3: DATABASE_URL filled in .env + Render
   ☐ A4: pg_cron enabled, challenge jobs scheduled
   ☐ A5: Leaderboard backfill run
-  ☐ A6: GitHub Actions secrets added (7 total)
-  ☐ A7: Firebase Web Push project + config in app.config.ts + API env
-  ☐ A8: PostHog project + API keys in .env files
-  ☐ A9: Sentry alert rules applied to both projects
-  ☐ A10: Custom domain (rivals.app) configured + /privacy /terms resolving
-  ☐ A11: Apple Developer + Google Play accounts set up
-  ☐ A12: Google OAuth credentials in Google Cloud + Supabase (optional)
-  ☐ A13: k6 load test run, results in perf-report.md
-  ☐ A14: EXPLAIN ANALYZE queries captured, missing indexes added
-  ☐ A15: All 3 personas walked on all 3 platforms (signed off)
-  ☐ A16: GDPR export + delete tested end-to-end
-  ☐ A17: Web push registration + notification delivery tested
+  ☐ A6: GitHub Actions secrets added (6 total, RAILWAY_TOKEN removed)
+  ☐ A7: Uptime Robot monitor created, pinging API every 5 minutes
+  ☐ A8: Firebase Web Push project + config in app.config.ts + API env
+  ☐ A9: PostHog project + API keys in .env files
+  ☐ A10: Sentry alert rules applied to both projects
+  ☐ A11: Custom domain (rivals.app) configured + /privacy /terms resolving
+  ☐ A12: Apple Developer + Google Play accounts set up
+  ☐ A13: Google OAuth credentials in Google Cloud + Supabase (optional)
+  ☐ A14: k6 load test run, results in perf-report.md
+  ☐ A15: EXPLAIN ANALYZE queries captured, missing indexes added
+  ☐ A16: All 3 personas walked on all 3 platforms (signed off)
+  ☐ A17: GDPR export + delete tested end-to-end
+  ☐ A18: Web push registration + notification delivery tested
 
 Pre-release:
   ☐ pnpm -w typecheck — all green
@@ -1310,7 +1377,8 @@ Pre-release:
   ☐ Smoke test: pnpm --filter @rivals/api exec ts-node src/scripts/smoke-prod.ts — passes
   ☐ Final code review + merge to main
   ☐ All GitHub Actions complete successfully
-  ☐ API deployed to Railway ✓
+  ☐ API deployed to Render (manual deploy or webhook) ✓
+  ☐ Uptime Robot monitor active (pinging API every 5 min) ✓
   ☐ Web deployed to Cloudflare Pages ✓
   ☐ Mobile built and submitted to App Store / Play
 
@@ -1318,7 +1386,8 @@ Pre-release:
 END OF MANUAL TASKS COMPLETE GUIDE
 ================================================================================
 
-Last updated: 2026-05-26
-Next step: Execute tasks in order (A1 → A17) or in parallel where independent.
+Last updated: 2026-05-26 (Updated with Render + Uptime Robot, Task count A1-A18)
+Next step: Execute tasks in order (A1 → A18) or in parallel where independent.
            See each task's "Prerequisites" to determine dependencies.
+           Key new task: A7 (Uptime Robot) keeps Render free tier alive 24/7.
 Questions: Refer back to each task's "Troubleshooting" section.
