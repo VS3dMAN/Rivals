@@ -13,6 +13,9 @@ on:
 
 jobs:
   deploy:
+    # Skip (instead of fail) until Cloudflare secrets are configured — set the
+    # CLOUDFLARE_CONFIGURED repository variable to 'true' once A6 is done.
+    if: ${{ vars.CLOUDFLARE_CONFIGURED == 'true' }}
     runs-on: ubuntu-latest
     concurrency: deploy-web
     steps:
