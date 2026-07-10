@@ -3,7 +3,7 @@
  *
  * These tests mock the database calls to test the streak logic in isolation.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { computeStreak } from '../streak';
 
 // ---------- Helpers ----------
@@ -40,6 +40,7 @@ function createMockDb(opts: {
   // query is being executed, then returns the right data.
   const mockDb = {
     select: vi.fn().mockReturnValue({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       from: vi.fn().mockImplementation((table: any) => {
         const tableName = table?.[Symbol.for('drizzle:Name')] ?? table?._.name ?? '';
 
@@ -127,6 +128,7 @@ function createMockDb(opts: {
     }),
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return mockDb as any;
 }
 

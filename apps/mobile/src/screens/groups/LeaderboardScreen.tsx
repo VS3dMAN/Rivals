@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Pressable,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';

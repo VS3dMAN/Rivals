@@ -7,7 +7,6 @@
 import { and, eq, isNull, sql, count } from 'drizzle-orm';
 import { schema, type Db } from '../../db/client';
 import { computeStreak } from './streak';
-import { todayInTz } from '../../lib/tz';
 import { createNotification } from '../notifications/service';
 
 interface RecomputeParams {

@@ -19,6 +19,7 @@ import { useSessionStore } from '../stores/session';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 
 export function ProfileScreen() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- crosses tab navigators
   const nav = useNavigation<NativeStackNavigationProp<any>>();
   const { data: user, isLoading } = useCurrentUser();
   const clear = useSessionStore((s) => s.clear);

@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { and, eq, isNull, sql, gte, count } from 'drizzle-orm';
+import { and, eq, isNull, gte, count } from 'drizzle-orm';
 import { z } from 'zod';
 import { schema, type Db } from '../../db/client';
 import { requireMember } from '../groups/service';

@@ -5,7 +5,7 @@
  * Web tokens require FCM (handled separately or via Expo if using Expo Go on web).
  */
 import { createSign } from 'node:crypto';
-import { eq, inArray } from 'drizzle-orm';
+import { inArray } from 'drizzle-orm';
 import { schema, type Db } from '../../db/client';
 import { getEnv } from '../../env';
 interface SendPushParams {

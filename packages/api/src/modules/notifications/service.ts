@@ -1,7 +1,7 @@
 /**
  * Notification service — creates in-app notifications and dispatches push.
  */
-import { and, eq, isNull, ne, inArray } from 'drizzle-orm';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import { schema, type Db } from '../../db/client';
 import { sendPush } from '../push/dispatcher';
 

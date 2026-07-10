@@ -17,7 +17,6 @@ import {
   useCreateChallenge,
   type ChallengeWindow,
 } from '../../hooks/useLeaderboard';
-import { useSessionStore } from '../../stores/session';
 import { useGroupQuery } from '../../hooks/useGroups';
 import type { GroupsStackParamList } from '../../navigation/GroupsStack';
 
@@ -60,7 +59,6 @@ function ChallengeRow({ item }: { item: ChallengeWindow }) {
 export function PastChallengesScreen() {
   const route = useRoute<Route>();
   const { groupId } = route.params;
-  const session = useSessionStore((s) => s.user);
 
   const groupQ = useGroupQuery(groupId);
   const challengesQ = useChallengesQuery(groupId);

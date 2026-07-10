@@ -5,7 +5,7 @@
  * user's timezone to compute the current consecutive-day streak, honoring
  * the per-habit `grace_days` setting.
  */
-import { and, eq, isNull, desc, sql, gte } from 'drizzle-orm';
+import { and, eq, isNull, desc } from 'drizzle-orm';
 import { schema, type Db } from '../../db/client';
 import { todayInTz, addDays } from '../../lib/tz';
 

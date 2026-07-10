@@ -18,7 +18,7 @@ run('RLS policies (0003)', () => {
   let groupId: string;
   let habitId: string;
 
-  async function asUser(uid: string, fn: () => Promise<void>) {
+  async function _asUser(uid: string, fn: () => Promise<void>) {
     await sql.begin(async (tx) => {
       // Emulate Supabase's auth.uid() resolution from the JWT claims GUC.
       await tx.unsafe(

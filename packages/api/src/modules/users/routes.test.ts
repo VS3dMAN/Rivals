@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Fastify from 'fastify';
 import sensible from '@fastify/sensible';
 import jwt from 'jsonwebtoken';
@@ -26,6 +26,7 @@ const fakeDb = {
       }),
     }),
   }),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any;
 
 describe('GET /me', () => {

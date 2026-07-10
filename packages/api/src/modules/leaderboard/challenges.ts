@@ -4,7 +4,7 @@
  * - POST /groups/:id/challenges — admin creates a challenge window
  * - GET /groups/:id/challenges — list challenge windows by status
  */
-import { and, eq, sql, desc, asc, inArray } from 'drizzle-orm';
+import { and, eq, sql, desc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { schema, type Db } from '../../db/client';
 import { HttpError, requireAdmin, requireMember } from '../groups/service';
@@ -18,7 +18,6 @@ export const createChallengeSchema = z.object({
 
 export type CreateChallengeInput = z.infer<typeof createChallengeSchema>;
 
-const statusFilter = z.enum(['upcoming', 'active', 'completed']).optional();
 
 /**
  * Create a new challenge window for a group.

@@ -9,7 +9,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { and, eq, isNull, desc, asc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { schema, type Db } from '../../db/client';
-import { HttpError, requireMember, requireAdmin } from '../groups/service';
+import { HttpError, requireMember } from '../groups/service';
 import {
   createChallenge,
   createChallengeSchema,

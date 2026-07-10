@@ -2,7 +2,7 @@
  * Badge evaluation service.
  * Called after recomputeScores to check if the user earned any new badges.
  */
-import { and, eq, isNull, sql, count } from 'drizzle-orm';
+import { and, eq, isNull, count } from 'drizzle-orm';
 import { schema, type Db } from '../../db/client';
 import { createNotification } from '../notifications/service';
 import { track } from '../../lib/analytics';

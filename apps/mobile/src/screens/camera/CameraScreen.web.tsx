@@ -96,7 +96,6 @@ export function CameraScreen() {
       streamRef.current = null;
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSecure]);
 
   if (!isSecure) return <HttpsRequiredError />;

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- in-memory db fake */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Fastify from 'fastify';
 import sensible from '@fastify/sensible';

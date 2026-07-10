@@ -9,7 +9,7 @@
  * Usage: pnpm --filter @rivals/api run backfill:leaderboard
  */
 import 'dotenv/config';
-import { and, isNull } from 'drizzle-orm';
+import { isNull } from 'drizzle-orm';
 import { getDb, schema } from '../db/client';
 import { recomputeScores } from '../modules/leaderboard/service';
 

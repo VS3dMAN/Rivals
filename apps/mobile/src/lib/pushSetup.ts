@@ -13,8 +13,10 @@ export async function registerForPushNotifications(): Promise<void> {
   if (Platform.OS === 'web') return;
 
   try {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment -- optional dep, keep permissive @ts-ignore
     // @ts-ignore — expo-notifications must be installed manually
     const Notifications = await import('expo-notifications');
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment -- optional dep, keep permissive @ts-ignore
     // @ts-ignore — expo-device must be installed manually
     const Device = await import('expo-device');
 
