@@ -14,7 +14,9 @@ services:
     # `corepack enable` fails on Render: it tries to replace /usr/bin/pnpm on a
     # read-only filesystem (EROFS). npx runs the pinned pnpm from the writable
     # npm cache instead.
-    buildCommand: npx --yes pnpm@9.12.3 install --frozen-lockfile && npx --yes pnpm@9.12.3 --filter @rivals/api build
+    # --prod=false is required: NODE_ENV=production makes pnpm skip
+    # devDependencies, and the build tool (esbuild) lives there.
+    buildCommand: npx --yes pnpm@9.12.3 install --frozen-lockfile --prod=false && npx --yes pnpm@9.12.3 --filter @rivals/api build
     startCommand: node packages/api/dist/index.js
     healthCheckPath: /health
     autoDeploy: true
