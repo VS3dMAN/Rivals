@@ -55,7 +55,10 @@ const routes: FastifyPluginAsync<AuthRouteOptions> = async (app, opts) => {
     const { data, error } = await supabase.auth.admin.createUser({
       email: body.email,
       password: body.password,
-      email_confirm: false,
+      // Confirmed at creation: the app has no email-verification flow, and
+      // signup signs the user straight in below - which Supabase refuses for an
+      // unconfirmed address when the project requires email confirmation.
+      email_confirm: true,
       user_metadata: { username: body.username, display_name: body.displayName },
     });
     if (error || !data.user) {
