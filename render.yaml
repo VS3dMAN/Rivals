@@ -11,7 +11,7 @@ services:
     runtime: node
     plan: free
     region: singapore # closest to Supabase ap-south-1 (Mumbai)
-    buildCommand: corepack enable && corepack prepare pnpm@9.12.0 --activate && pnpm install --frozen-lockfile && pnpm --filter @rivals/api build
+    buildCommand: corepack enable && corepack prepare pnpm@9.12.3 --activate && pnpm install --frozen-lockfile && pnpm --filter @rivals/api build
     startCommand: node packages/api/dist/index.js
     healthCheckPath: /health
     autoDeploy: true
