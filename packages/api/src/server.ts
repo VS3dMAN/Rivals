@@ -88,7 +88,10 @@ export async function buildServer(opts: BuildOptions = {}): Promise<FastifyInsta
   app.decorate('db', db);
 
   await app.register(errorsPlugin);
-  await app.register(authPlugin, { jwtSecret: env.SUPABASE_JWT_SECRET });
+  await app.register(authPlugin, {
+    jwtSecret: env.SUPABASE_JWT_SECRET,
+    jwksUrl: env.SUPABASE_URL ? `${env.SUPABASE_URL}/auth/v1/.well-known/jwks.json` : undefined,
+  });
 
   await app.register(healthRoutes, { db });
   await app.register(usersRoutes, { db });

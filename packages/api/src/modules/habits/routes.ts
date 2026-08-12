@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { and, eq, gte, isNull, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { schema, type Db } from '../../db/client';
 import {
@@ -113,7 +113,7 @@ const routes: FastifyPluginAsync<HabitsRouteOptions> = async (app, opts) => {
           eq(schema.habitLogs.userId, auth.id),
           eq(schema.habitLogs.logDate, today),
           isNull(schema.habitLogs.deletedAt),
-          sql`${schema.habitLogs.habitId} = ANY(${habitIds})`,
+          inArray(schema.habitLogs.habitId, habitIds),
         ),
       );
     const todayLogIdByHabit = new Map<string, string>();
@@ -135,7 +135,7 @@ const routes: FastifyPluginAsync<HabitsRouteOptions> = async (app, opts) => {
           eq(schema.habitLogs.userId, auth.id),
           isNull(schema.habitLogs.deletedAt),
           gte(schema.habitLogs.logDate, graceFloor),
-          sql`${schema.habitLogs.habitId} = ANY(${habitIds})`,
+          inArray(schema.habitLogs.habitId, habitIds),
         ),
       );
     const lastByHabit = new Map<string, string>();
