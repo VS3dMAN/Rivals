@@ -87,6 +87,11 @@ const routes: FastifyPluginAsync<AuthRouteOptions> = async (app, opts) => {
       password: body.password,
     });
     if (signInErr || !sessionData.session) {
+      // Roll back both writes. Without this the caller gets a 500 while the
+      // account silently exists, so retrying reports USERNAME_TAKEN and the
+      // user is stranded with no way to sign in.
+      await db.delete(schema.users).where(eq(schema.users.id, data.user.id)).catch(() => void 0);
+      await supabase.auth.admin.deleteUser(data.user.id).catch(() => void 0);
       throw httpError(500, 'SESSION_FAILED', 'Created user but could not create session');
     }
 
